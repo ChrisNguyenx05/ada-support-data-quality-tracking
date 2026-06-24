@@ -1,6 +1,11 @@
 # ada-support-data-quality-tracking
 
-Local tool support Data Quality checks for daily, weekly, and monthly platform data.
+Tool support Data Quality checks for daily, weekly, and monthly platform data.
+
+The project now supports two modes:
+
+- Local single-machine mode via `app.py` and `run_tool.bat`
+- Cloud split mode: `frontend/` on Vercel and `backend/` on a Python web service such as Render/Railway/Fly.io
 
 ## What This Tool Does
 
@@ -20,6 +25,8 @@ The generated Excel report includes comparison rows, normalized data, duplicate 
 
 ## Quick Start
 
+### Local Mode
+
 1. Run `install_deps.bat` once to install the PostgreSQL driver.
 2. Double-click `run_tool.bat`.
 3. Open `http://127.0.0.1:8765` if the browser does not open automatically.
@@ -30,6 +37,70 @@ The generated Excel report includes comparison rows, normalized data, duplicate 
 8. Download the generated report from the result screen.
 
 The DB password is only used for the current run and is not saved.
+
+### Cloud Mode
+
+Deploy order:
+
+1. Deploy `backend/` first and copy the backend public URL.
+2. Deploy `frontend/` to Vercel.
+3. In Vercel, set environment variable:
+
+```text
+VITE_API_BASE_URL=https://your-backend-url
+```
+
+4. Redeploy the Vercel frontend after setting the environment variable.
+
+The frontend sends uploaded files and temporary DB credentials to the backend for one run. Do not make the backend public without access protection if production credentials are sensitive.
+
+## Backend Deploy
+
+The backend is a FastAPI app:
+
+```text
+backend/main.py
+```
+
+Start command:
+
+```bash
+uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+```
+
+Install command:
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+Recommended environment variables:
+
+```text
+ALLOWED_ORIGINS=https://your-vercel-app.vercel.app
+DQ_OUTPUT_DIR=/tmp/dq_outputs
+```
+
+For first testing, `ALLOWED_ORIGINS=*` is convenient. For real use, restrict it to your Vercel domain.
+
+## Frontend Deploy On Vercel
+
+Import the GitHub repository into Vercel and set:
+
+```text
+Root Directory: frontend
+Framework Preset: Vite
+Build Command: npm run build
+Output Directory: dist
+```
+
+Environment variable:
+
+```text
+VITE_API_BASE_URL=https://your-backend-url
+```
+
+Vercel will deploy automatically on future pushes to the connected branch.
 
 ## Suggested DB Export Columns
 

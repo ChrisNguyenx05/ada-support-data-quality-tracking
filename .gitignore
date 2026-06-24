@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 server.*.log
 root_docs/
+frontend/node_modules/
+frontend/dist/
