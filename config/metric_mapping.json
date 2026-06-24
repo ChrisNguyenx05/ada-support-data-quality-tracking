@@ -1,0 +1,77 @@
+{
+  "canonical_metrics": {
+    "quantity": {
+      "label": "Quantity / Units sold",
+      "tolerance_abs": 0,
+      "tolerance_pct": 0
+    },
+    "revenue": {
+      "label": "Revenue / GMV",
+      "tolerance_abs": 0,
+      "tolerance_pct": 0
+    },
+    "page_view": {
+      "label": "Page views",
+      "tolerance_abs": 0,
+      "tolerance_pct": 0
+    },
+    "product_impression": {
+      "label": "Product impressions",
+      "tolerance_abs": 0,
+      "tolerance_pct": 0
+    },
+    "orders": {
+      "label": "Orders",
+      "tolerance_abs": 0,
+      "tolerance_pct": 0
+    }
+  },
+  "platform_aliases": {
+    "SHP": {
+      "date": ["Date"],
+      "quantity": ["Gross Units Sold", "Units Sold"],
+      "revenue": [
+        "Gross Sales(Local Currency)",
+        "Gross Sales (Local Currency)",
+        "Gross Sales (Shopee Rebate applied)(Local Currency)",
+        "Sales",
+        "Gross Sales(USD)"
+      ],
+      "page_view": ["Product Views"],
+      "orders": ["Gross Orders", "Orders"]
+    },
+    "TTK": {
+      "date": ["Date"],
+      "quantity": ["Items sold", "SKU orders"],
+      "revenue": ["GMV", "Gross revenue"],
+      "page_view": ["Page views"],
+      "product_impression": ["Product impressions"],
+      "orders": ["Orders"]
+    },
+    "LAZ": {
+      "date": ["Date", "Day"],
+      "quantity": ["Units Sold", "Items Sold", "Product Sold", "Quantity"],
+      "revenue": ["Revenue", "GMV", "Sales", "Net Sales", "Revenue(Local Currency)"],
+      "page_view": ["Page Views", "Product Views", "Visitors"],
+      "orders": ["Orders"]
+    },
+    "AUTO": {
+      "date": ["Date", "Day", "year_month"],
+      "quantity": ["quantity", "total_quantity", "sum_quantity", "Units Sold", "Items sold", "Gross Units Sold"],
+      "revenue": ["revenue", "revenue_local", "sum_revenue", "GMV", "Gross revenue", "Sales"],
+      "page_view": ["page_view", "total_page_view", "Product Views", "Page views"],
+      "product_impression": ["product_impression", "Product impressions"],
+      "orders": ["orders", "Gross Orders", "Orders"]
+    }
+  },
+  "db_aliases": {
+    "seller_id": ["seller", "seller_id", "used_id"],
+    "date": ["day", "date", "year_month"],
+    "source": ["source"],
+    "quantity": ["total_quantity", "sum_quantity", "quantity"],
+    "revenue": ["revenue_local", "sum_revenue", "revenue", "s_onsite_selling"],
+    "page_view": ["total_page_view", "page_view"],
+    "product_impression": ["product_impression"],
+    "orders": ["orders", "total_orders"]
+  }
+}

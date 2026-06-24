@@ -1,0 +1,6 @@
+outputs/
+outputs_test_*.csv
+__pycache__/
+*.pyc
+server.*.log
+root_docs/
