@@ -83,6 +83,8 @@ DQ_OUTPUT_DIR=/tmp/dq_outputs
 
 For first testing, `ALLOWED_ORIGINS=*` is convenient. For real use, restrict it to your Vercel domain.
 
+Do not use a project folder such as `/var/task/outputs` for generated reports on serverless platforms. Those folders are usually read-only. Use `/tmp/dq_outputs`.
+
 ## Frontend Deploy On Vercel
 
 Import the GitHub repository into Vercel and set:

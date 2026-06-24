@@ -14,7 +14,7 @@ from dq_checker.db import DbCredentials, load_clients
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUTS = Path(os.getenv("DQ_OUTPUT_DIR", ROOT / "outputs")).resolve()
+OUTPUTS = Path(os.getenv("DQ_OUTPUT_DIR", Path(tempfile.gettempdir()) / "dq_outputs")).resolve()
 OUTPUTS.mkdir(parents=True, exist_ok=True)
 
 
