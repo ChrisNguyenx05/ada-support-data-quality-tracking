@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const DEFAULT_API_BASE = 'https://ada-support-data-quality-tracking.onrender.com';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE).replace(/\/$/, '');
 
 function iso(date) {
   return date.toISOString().slice(0, 10);
@@ -96,7 +97,7 @@ function App() {
     <div>
       <header>
         <h1>Data Quality Batch Checker</h1>
-        <span>Vercel frontend + separate Python backend</span>
+        <span>API: {API_BASE}</span>
       </header>
       <main>
         <aside>

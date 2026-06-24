@@ -104,6 +104,14 @@ VITE_API_BASE_URL=https://your-backend-url
 
 Vercel will deploy automatically on future pushes to the connected branch.
 
+The frontend has a safe default API URL:
+
+```text
+https://ada-support-data-quality-tracking.onrender.com
+```
+
+The active API URL is shown in the top-right header of the app. If it does not show the Render URL, redeploy the frontend or fix `VITE_API_BASE_URL`.
+
 ## Suggested DB Export Columns
 
 Seller-level sales:
