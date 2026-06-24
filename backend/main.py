@@ -14,8 +14,28 @@ from dq_checker.db import DbCredentials, load_clients
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUTS = Path(os.getenv("DQ_OUTPUT_DIR", Path(tempfile.gettempdir()) / "dq_outputs")).resolve()
-OUTPUTS.mkdir(parents=True, exist_ok=True)
+
+
+def _writable_output_dir() -> Path:
+    candidates = [
+        Path(os.getenv("DQ_OUTPUT_DIR", "")).expanduser() if os.getenv("DQ_OUTPUT_DIR") else None,
+        Path(tempfile.gettempdir()) / "dq_outputs",
+    ]
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        try:
+            resolved = candidate.resolve()
+            resolved.mkdir(parents=True, exist_ok=True)
+            probe = tempfile.NamedTemporaryFile(dir=resolved, delete=True)
+            probe.close()
+            return resolved
+        except OSError:
+            continue
+    raise RuntimeError("No writable output directory is available for generated reports.")
+
+
+OUTPUTS = _writable_output_dir()
 
 
 def _allowed_origins() -> list[str]:
