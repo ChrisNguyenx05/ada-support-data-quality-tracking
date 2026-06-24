@@ -60,6 +60,16 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/runtime")
+def runtime() -> dict[str, str]:
+    return {
+        "status": "ok",
+        "entrypoint": "backend/main.py",
+        "output_dir": str(OUTPUTS),
+        "dq_output_dir_env": os.getenv("DQ_OUTPUT_DIR", ""),
+    }
+
+
 @app.get("/api/clients")
 def clients() -> dict[str, list[str]]:
     return {"clients": list(load_clients().keys())}

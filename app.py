@@ -3,6 +3,8 @@ from __future__ import annotations
 import cgi
 import json
 import mimetypes
+import os
+import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -13,7 +15,28 @@ from dq_checker.db import DbCredentials
 
 
 ROOT = Path(__file__).resolve().parent
-OUTPUTS = ROOT / "outputs"
+
+
+def _writable_output_dir() -> Path:
+    candidates = [
+        Path(os.getenv("DQ_OUTPUT_DIR", "")).expanduser() if os.getenv("DQ_OUTPUT_DIR") else None,
+        Path(tempfile.gettempdir()) / "dq_outputs",
+    ]
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        try:
+            resolved = candidate.resolve()
+            resolved.mkdir(parents=True, exist_ok=True)
+            probe = tempfile.NamedTemporaryFile(dir=resolved, delete=True)
+            probe.close()
+            return resolved
+        except OSError:
+            continue
+    raise RuntimeError("No writable output directory is available for generated reports.")
+
+
+OUTPUTS = _writable_output_dir()
 
 
 HTML = r"""<!doctype html>
@@ -219,6 +242,15 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/":
             self._send(200, HTML.encode("utf-8"), "text/html; charset=utf-8")
             return
+        if parsed.path == "/api/runtime":
+            body = {
+                "status": "ok",
+                "entrypoint": "app.py",
+                "output_dir": str(OUTPUTS),
+                "dq_output_dir_env": os.getenv("DQ_OUTPUT_DIR", ""),
+            }
+            self._send(200, json.dumps(body, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
         if parsed.path == "/download":
             query = dict(part.split("=", 1) for part in parsed.query.split("&") if "=" in part)
             target = Path(unquote(query.get("path", ""))).resolve()
@@ -292,7 +324,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    OUTPUTS.mkdir(exist_ok=True)
+    OUTPUTS.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer(("127.0.0.1", 8765), Handler)
     print("Data Quality Checker is running at http://127.0.0.1:8765")
     print("Press Ctrl+C to stop.")
