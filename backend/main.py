@@ -49,6 +49,7 @@ app = FastAPI(title="Data Quality Checker API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins(),
+    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost(:[0-9]+)?|http://127\.0\.0\.1(:[0-9]+)?",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
