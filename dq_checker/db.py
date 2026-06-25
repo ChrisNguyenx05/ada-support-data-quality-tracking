@@ -70,6 +70,29 @@ QUERY_DEFINITIONS = {
         """,
         "level": "seller",
     },
+    "item_seller_sales": {
+        "sql": """
+            SELECT
+                seller_used_id AS seller_id,
+                day::date AS day,
+                COALESCE(source, 'NULL_SOURCE') AS source,
+                SUM(quantity) AS quantity,
+                SUM(
+                    CASE
+                        WHEN split_part(seller_used_id, '.', 2) = 'LAZ' THEN s_net
+                        WHEN split_part(seller_used_id, '.', 2) IN ('SHP', 'TTK') THEN s_paid
+                        ELSE COALESCE(s_paid, s_net, s_onsite_selling, s_seller_selling, 0)
+                    END
+                ) AS revenue,
+                NULL::numeric AS page_view
+            FROM ecommerce_item
+            WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
+              AND seller_used_id = %(seller_id)s
+            GROUP BY 1, 2, 3
+        """,
+        "level": "seller",
+        "as_data_type": "seller_sales",
+    },
     "seller_traffic": {
         "sql": """
             SELECT
@@ -118,6 +141,29 @@ QUERY_DEFINITIONS = {
         """,
         "level": "sku",
     },
+    "item_sku_sales": {
+        "sql": """
+            SELECT
+                seller_used_id AS seller_id,
+                day::date AS day,
+                COALESCE(source, 'NULL_SOURCE') AS source,
+                SUM(quantity) AS quantity,
+                SUM(
+                    CASE
+                        WHEN split_part(seller_used_id, '.', 2) = 'LAZ' THEN s_net
+                        WHEN split_part(seller_used_id, '.', 2) IN ('SHP', 'TTK') THEN s_paid
+                        ELSE COALESCE(s_paid, s_net, s_onsite_selling, s_seller_selling, s_net, 0)
+                    END
+                ) AS revenue,
+                NULL::numeric AS page_view
+            FROM ecommerce_item
+            WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
+              AND seller_used_id = %(seller_id)s
+            GROUP BY 1, 2, 3
+        """,
+        "level": "sku",
+        "as_data_type": "sku_sales",
+    },
     "sku_traffic": {
         "sql": """
             SELECT
@@ -151,20 +197,26 @@ def query_seller_sources(
     start_date: str,
     end_date: str,
     data_level: str = "both",
+    use_item_sales: bool = False,
 ) -> pd.DataFrame:
     params = {"seller_id": seller_id, "start_date": start_date, "end_date": end_date}
     frames: list[pd.DataFrame] = []
     wanted_level = (data_level or "both").lower()
     with _connect(credentials) as conn:
         for data_type, definition in QUERY_DEFINITIONS.items():
+            if use_item_sales and data_type in ("seller_sales", "sku_sales"):
+                continue
+            if not use_item_sales and data_type in ("item_seller_sales", "item_sku_sales"):
+                continue
             if wanted_level in ("seller", "sku") and definition["level"] != wanted_level:
                 continue
             df = pd.read_sql_query(definition["sql"], conn, params=params)
             if df.empty:
                 continue
-            df.insert(0, "data_type", data_type)
+            df.insert(0, "data_type", definition.get("as_data_type", data_type))
             df.insert(1, "data_level", definition["level"])
+            df.insert(2, "query_source_table", data_type)
             frames.append(df)
     if not frames:
-        return pd.DataFrame(columns=["data_type", "data_level", "seller_id", "day", "source", "quantity", "revenue", "page_view"])
+        return pd.DataFrame(columns=["data_type", "data_level", "query_source_table", "seller_id", "day", "source", "quantity", "revenue", "page_view"])
     return pd.concat(frames, ignore_index=True)

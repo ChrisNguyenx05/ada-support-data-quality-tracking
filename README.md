@@ -33,7 +33,7 @@ The generated Excel report includes comparison rows, normalized data, duplicate 
 4. Choose client, enter DB username/password, date range, and granularity.
 5. Choose check level: `SKU only`, `Seller only`, or `Seller + SKU`.
 6. Upload multiple platform Excel files.
-7. Fill the mapping table: file name, seller ID, platform, optional sheet.
+7. Fill the mapping table: file name, seller ID, platform, `Item?`, optional sheet.
 8. Click `Run batch check`.
 9. Download the generated report from the result screen.
 
@@ -181,6 +181,12 @@ For every uploaded seller file, the tool queries:
 It filters by the seller ID you enter in the upload mapping table and the selected date range.
 
 Use `SKU only` to query only SKU sales/traffic tables. Use `Seller only` to query only seller sales/traffic tables. This reduces query time for daily batches.
+
+Turn on `Item?` for a file when sales should be checked from `ecommerce_item` instead of export sales tables. When `Item?` is on:
+
+- sales uses `ecommerce_item`
+- SKU traffic still uses `ecommerce_export_sku_traffic`
+- Seller traffic still uses `ecommerce_export_seller_traffic`
 
 Week and month buttons only control the date range. The comparison is always by daily rows inside that selected range, so source investigation stays day-by-day.
 

@@ -134,6 +134,11 @@ button:disabled {
   min-width: 120px;
 }
 
+.mapping input[type="checkbox"] {
+  min-width: auto;
+  width: auto;
+}
+
 .topbar {
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);

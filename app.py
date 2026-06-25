@@ -82,6 +82,7 @@ HTML = r"""<!doctype html>
     .quick button { margin-top:0; background:#fff; color:var(--blue); }
     .mapping { margin-top:14px; max-height:270px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
     .mapping input, .mapping select { padding:6px; font-size:12px; min-width:120px; }
+    .mapping input[type=checkbox] { min-width:auto; width:auto; }
     @media (max-width:900px) { main { grid-template-columns:1fr; padding:12px; } .cards { grid-template-columns:1fr 1fr; } }
   </style>
 </head>
@@ -127,8 +128,8 @@ HTML = r"""<!doctype html>
         <input type="file" id="platformFiles" name="platform_files" multiple required>
         <div class="mapping">
           <table>
-            <thead><tr><th>File</th><th>Seller ID</th><th>Platform</th><th>Sheet</th></tr></thead>
-            <tbody id="fileMap"><tr><td colspan="4">Choose files first.</td></tr></tbody>
+            <thead><tr><th>File</th><th>Seller ID</th><th>Platform</th><th>Item?</th><th>Sheet</th></tr></thead>
+            <tbody id="fileMap"><tr><td colspan="5">Choose files first.</td></tr></tbody>
           </table>
         </div>
         <button id="run" type="submit">Run batch check</button>
@@ -186,9 +187,10 @@ HTML = r"""<!doctype html>
           <td>${file.name}</td>
           <td><input name="seller_${i}" value="${guessed}" placeholder="TH.LAZ.100192131567" required></td>
           <td><select name="marketplace_${i}"><option ${platform==='AUTO'?'selected':''}>AUTO</option><option ${platform==='SHP'?'selected':''}>SHP</option><option ${platform==='LAZ'?'selected':''}>LAZ</option><option ${platform==='TTK'?'selected':''}>TTK</option></select></td>
+          <td><input name="use_item_sales_${i}" type="checkbox"></td>
           <td><input name="sheet_${i}" placeholder="optional"></td>
         </tr>`;
-      }).join('') || '<tr><td colspan="4">Choose files first.</td></tr>';
+      }).join('') || '<tr><td colspan="5">Choose files first.</td></tr>';
     });
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -204,7 +206,8 @@ HTML = r"""<!doctype html>
           fileName: file.name,
           sellerId: fd.get(`seller_${i}`),
           marketplace: fd.get(`marketplace_${i}`),
-          sheet: fd.get(`sheet_${i}`)
+          sheet: fd.get(`sheet_${i}`),
+          useItemSales: fd.get(`use_item_sales_${i}`) === 'on'
         }));
         fd.append('mapping_json', JSON.stringify(mapping));
         const res = await fetch('/api/batch-db', { method:'POST', body:fd });
@@ -295,6 +298,7 @@ class Handler(BaseHTTPRequestHandler):
                             seller_id=seller_id,
                             marketplace=(row.get("marketplace") or "AUTO").upper(),
                             platform_sheet=(row.get("sheet") or "").strip() or None,
+                            use_item_sales=bool(row.get("useItemSales")),
                         )
                     )
                 result = run_db_batch(

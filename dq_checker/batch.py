@@ -36,9 +36,19 @@ def run_db_batch(
 
     platform_norm = pd.concat(platform_parts, ignore_index=True)
     db_parts: list[pd.DataFrame] = []
-    for seller_id in sorted({spec.seller_id for spec in specs if spec.seller_id.strip()}):
+    query_jobs = sorted({(spec.seller_id, spec.use_item_sales) for spec in specs if spec.seller_id.strip()})
+    for seller_id, use_item_sales in query_jobs:
         try:
-            db_parts.append(query_seller_sources(credentials, seller_id, start_date, end_date, data_level=data_level))
+            db_parts.append(
+                query_seller_sources(
+                    credentials,
+                    seller_id,
+                    start_date,
+                    end_date,
+                    data_level=data_level,
+                    use_item_sales=use_item_sales,
+                )
+            )
         except Exception as exc:
             errors.append(f"{seller_id}: {exc}")
 

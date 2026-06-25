@@ -29,6 +29,7 @@ class SellerFileSpec:
     seller_id: str
     marketplace: str
     platform_sheet: str | None = None
+    use_item_sales: bool = False
 
 
 def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:

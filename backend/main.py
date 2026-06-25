@@ -116,6 +116,7 @@ async def batch_db(
                     seller_id=seller_id,
                     marketplace=(row.get("marketplace") or "AUTO").upper(),
                     platform_sheet=(row.get("sheet") or "").strip() or None,
+                    use_item_sales=bool(row.get("useItemSales")),
                 )
             )
 

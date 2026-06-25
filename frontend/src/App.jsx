@@ -57,7 +57,7 @@ function App() {
     setFiles(list);
     setMapping(list.map((file) => {
       const sellerId = guessSeller(file.name);
-      return { fileName: file.name, sellerId, marketplace: guessPlatform(sellerId), sheet: '' };
+      return { fileName: file.name, sellerId, marketplace: guessPlatform(sellerId), sheet: '', useItemSales: false };
     }));
   }
 
@@ -149,9 +149,9 @@ function App() {
 
             <div className="mapping">
               <table>
-                <thead><tr><th>File</th><th>Seller ID</th><th>Platform</th><th>Sheet</th></tr></thead>
+                <thead><tr><th>File</th><th>Seller ID</th><th>Platform</th><th>Item?</th><th>Sheet</th></tr></thead>
                 <tbody>
-                  {mapping.length === 0 && <tr><td colSpan="4">Choose files first.</td></tr>}
+                  {mapping.length === 0 && <tr><td colSpan="5">Choose files first.</td></tr>}
                   {mapping.map((row, i) => (
                     <tr key={row.fileName}>
                       <td>{row.fileName}</td>
@@ -161,6 +161,7 @@ function App() {
                           <option>AUTO</option><option>SHP</option><option>LAZ</option><option>TTK</option>
                         </select>
                       </td>
+                      <td><input checked={row.useItemSales} onChange={(e) => updateMap(i, 'useItemSales', e.target.checked)} type="checkbox" /></td>
                       <td><input value={row.sheet} onChange={(e) => updateMap(i, 'sheet', e.target.value)} placeholder="optional" /></td>
                     </tr>
                   ))}
