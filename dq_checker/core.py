@@ -322,8 +322,10 @@ def compare_platform_to_db_sources(
     config = load_config()
     canonical = config["canonical_metrics"]
     metrics = ["quantity", "revenue", "page_view"]
+    context_metrics = ["orders"]
+    platform_metrics = [m for m in [*metrics, *context_metrics] if m in platform_norm.columns]
 
-    platform_cols = ["seller_id", "period", *[m for m in metrics if m in platform_norm.columns]]
+    platform_cols = ["seller_id", "period", *platform_metrics]
     platform_agg = platform_norm[platform_cols].groupby(["seller_id", "period"], dropna=False).sum(numeric_only=True).reset_index()
 
     db = db_by_source.copy()
@@ -415,6 +417,8 @@ def compare_platform_to_db_sources(
 
         for metric in metric_list:
             platform_value = float(target.get(metric, 0) or 0)
+            platform_orders_available = "orders" in platform_agg.columns
+            platform_orders = float(target.get("orders", 0) or 0) if platform_orders_available else None
             db_value = float(all_row.get(metric, 0) or 0)
             all_match = _is_close(platform_value, db_value, metric, canonical)
             matching_sources = []
@@ -462,6 +466,8 @@ def compare_platform_to_db_sources(
                     "query_source_table": query_source_table,
                     "metric": metric,
                     "platform_value": platform_value,
+                    "platform_orders": platform_orders,
+                    "platform_orders_available": platform_orders_available,
                     "db_all_sources": db_value,
                     "diff_db_minus_platform": diff,
                     "diff_pct": diff / platform_value if platform_value else (0 if db_value == 0 else 1),
@@ -486,6 +492,31 @@ def compare_platform_to_db_sources(
         .query("source_count > 1")
     )
     summary = detail.groupby("status").size().reset_index(name="count") if not detail.empty else pd.DataFrame(columns=["status", "count"])
+    if not detail.empty and "status" in detail.columns:
+        missing_order_summary = (
+            detail[detail["status"] == "missing_in_db"]
+            .groupby(["seller_id", "period"], dropna=False)
+            .agg(
+                platform_orders=("platform_orders", "max"),
+                platform_orders_available=("platform_orders_available", "max"),
+                missing_rows=("status", "size"),
+                missing_metrics=("metric", lambda values: ", ".join(sorted({str(value) for value in values}))),
+                missing_query_tables=("query_source_table", lambda values: ", ".join(sorted({str(value) for value in values}))),
+            )
+            .reset_index()
+        )
+    else:
+        missing_order_summary = pd.DataFrame(
+            columns=[
+                "seller_id",
+                "period",
+                "platform_orders",
+                "platform_orders_available",
+                "missing_rows",
+                "missing_metrics",
+                "missing_query_tables",
+            ]
+        )
 
     output_dir = output_dir or ROOT / "outputs"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -497,6 +528,7 @@ def compare_platform_to_db_sources(
         source_detail.to_excel(writer, sheet_name="Source_Investigation", index=False)
         source_detail.to_excel(writer, sheet_name="Source_Check_Detail", index=False)
         duplicate_source.to_excel(writer, sheet_name="Duplicate_Source", index=False)
+        missing_order_summary.to_excel(writer, sheet_name="Missing_Order_Summary", index=False)
         (detail[detail["status"] == "missing_in_db"] if "status" in detail.columns else detail).to_excel(writer, sheet_name="Missing_In_DB", index=False)
         (detail[detail["status"] == "mismatch"] if "status" in detail.columns else detail).to_excel(writer, sheet_name="Mismatch_Value", index=False)
         (detail[detail["status"] == "match"] if "status" in detail.columns else detail).to_excel(writer, sheet_name="Matched", index=False)
@@ -515,6 +547,7 @@ def compare_platform_to_db_sources(
                 "Source_Investigation",
                 "Source_Check_Detail",
                 "Duplicate_Source",
+                "Missing_Order_Summary",
                 "Missing_In_DB",
                 "Mismatch_Value",
                 "Matched",
@@ -530,6 +563,7 @@ def compare_platform_to_db_sources(
         "report_path": str(out_path.resolve()),
         "source_rows": len(source_detail),
         "duplicate_source": len(duplicate_source),
+        "missing_order_summary": missing_order_summary.to_dict(orient="records"),
     }
 
 

@@ -28,6 +28,11 @@ function number(value) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+function optionalNumber(value, available = true) {
+  if (!available || value === null || value === undefined || Number.isNaN(Number(value))) return '-';
+  return number(value);
+}
+
 const SELLER_COLORS = ['#E8F3FF', '#EAF8EE', '#FFF4DE', '#F3EAFE', '#FFEAEA', '#E9F7F8', '#F8F0E7', '#EEF2FF'];
 
 function sellerColor(sellerId) {
@@ -93,6 +98,7 @@ function App() {
 
   const queryDebug = useMemo(() => result?.query_debug || [], [result]);
   const resultErrors = useMemo(() => (result?.errors || []).filter(Boolean), [result]);
+  const missingOrderSummary = useMemo(() => result?.missing_order_summary || [], [result]);
 
   function onFiles(nextFiles) {
     const list = [...nextFiles];
@@ -307,12 +313,36 @@ function App() {
                 </div>
               </details>
             )}
+            {missingOrderSummary.length > 0 && (
+              <details className="debug-panel" open>
+                <summary>Missing order summary ({missingOrderSummary.length})</summary>
+                <div className="table-wrap debug-wrap">
+                  <table>
+                    <thead>
+                      <tr><th>Seller</th><th>Period</th><th>Orders</th><th>Missing rows</th><th>Metrics</th><th>Query tables</th></tr>
+                    </thead>
+                    <tbody>
+                      {missingOrderSummary.map((row, i) => (
+                        <tr key={`${row.seller_id}-${row.period}-${i}`}>
+                          <td>{row.seller_id}</td>
+                          <td>{row.period}</td>
+                          <td>{optionalNumber(row.platform_orders, row.platform_orders_available)}</td>
+                          <td>{number(row.missing_rows)}</td>
+                          <td>{row.missing_metrics}</td>
+                          <td>{row.missing_query_tables}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            )}
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Status</th><th>Seller</th><th>Period</th><th>Level</th><th>Type</th><th>Query table</th><th>Metric</th><th>Platform</th><th>DB all sources</th><th>Diff</th><th>Matching source</th></tr></thead>
+                <thead><tr><th>Status</th><th>Seller</th><th>Period</th><th>Level</th><th>Type</th><th>Query table</th><th>Metric</th><th>Platform</th><th>Orders</th><th>DB all sources</th><th>Diff</th><th>Matching source</th></tr></thead>
                 <tbody>
-                  {!result && <tr><td colSpan="11">Upload files to start.</td></tr>}
-                  {result && filteredComparison.length === 0 && <tr><td colSpan="11">No rows for selected filters.</td></tr>}
+                  {!result && <tr><td colSpan="12">Upload files to start.</td></tr>}
+                  {result && filteredComparison.length === 0 && <tr><td colSpan="12">No rows for selected filters.</td></tr>}
                   {filteredComparison.map((row, i) => (
                     <tr key={`${row.seller_id}-${row.period}-${row.data_type}-${row.metric}-${i}`} style={{ background: sellerColor(row.seller_id) }}>
                       <td className={`status ${row.status}`}>{row.status}</td>
@@ -323,6 +353,7 @@ function App() {
                       <td>{row.query_source_table || row.data_type}</td>
                       <td>{row.metric}</td>
                       <td>{number(row.platform_value)}</td>
+                      <td>{optionalNumber(row.platform_orders, row.platform_orders_available)}</td>
                       <td>{number(row.db_all_sources)}</td>
                       <td>{number(row.diff_db_minus_platform)}</td>
                       <td>{row.matching_source_alone}</td>
