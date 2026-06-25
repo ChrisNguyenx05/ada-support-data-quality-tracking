@@ -92,6 +92,7 @@ function App() {
   }, [result, selectedMetric, selectedStatus, selectedTable]);
 
   const queryDebug = useMemo(() => result?.query_debug || [], [result]);
+  const resultErrors = useMemo(() => (result?.errors || []).filter(Boolean), [result]);
 
   function onFiles(nextFiles) {
     const list = [...nextFiles];
@@ -221,9 +222,15 @@ function App() {
         <section>
           <div className="topbar">
             <strong>Result</strong>
+            {result?.api_version && <span>Backend: {result.api_version}</span>}
             {downloadHref && <a className="download" href={downloadHref}>Download report</a>}
           </div>
           {error && <div className="error">{error}</div>}
+          {resultErrors.length > 0 && (
+            <div className="error">
+              <strong>Backend errors:</strong> {resultErrors.join(' | ')}
+            </div>
+          )}
           <div className="cards">
             {['match', 'mismatch', 'missing_in_db', 'suspicious_extra_source'].map((key) => (
               <div className="metric" key={key}><b className={key}>{summary[key] || 0}</b><span>{key}</span></div>
@@ -266,7 +273,7 @@ function App() {
                 <span>{filteredComparison.length} rows</span>
               </div>
             )}
-            {queryDebug.length > 0 && (
+            {result && (
               <details className="debug-panel">
                 <summary>DB query debug ({queryDebug.length})</summary>
                 <div className="table-wrap debug-wrap">
@@ -277,6 +284,9 @@ function App() {
                       </tr>
                     </thead>
                     <tbody>
+                      {queryDebug.length === 0 && (
+                        <tr><td colSpan="11">Backend did not return query_debug. This usually means Render is still running an old deployment.</td></tr>
+                      )}
                       {queryDebug.map((row, i) => (
                         <tr key={`${row.seller_id}-${row.query_source_table}-${i}`}>
                           <td>{row.seller_id}</td>

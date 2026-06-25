@@ -53,6 +53,34 @@ def _expected_query_tables_for_specs(specs: list[SellerFileSpec], data_level: st
     return rows
 
 
+def _job_error_debug_row(
+    seller_id: str,
+    use_item_sales: bool,
+    start_date: str,
+    end_date: str,
+    error: Exception,
+) -> dict[str, Any]:
+    return {
+        "seller_id": seller_id,
+        "query_source_table": "query_job",
+        "physical_table": "",
+        "data_level": "",
+        "data_type": "",
+        "use_item_sales": use_item_sales,
+        "start_date": start_date,
+        "end_date": end_date,
+        "row_count": 0,
+        "quantity_sum": 0,
+        "revenue_sum": 0,
+        "page_view_sum": 0,
+        "first_day": "",
+        "last_day": "",
+        "source_sample": "",
+        "status": "error",
+        "error": str(error),
+    }
+
+
 def run_db_batch(
     credentials: DbCredentials,
     specs: list[SellerFileSpec],
@@ -96,6 +124,7 @@ def run_db_batch(
             query_debug.extend(debug_rows)
         except Exception as exc:
             errors.append(f"{seller_id}: {exc}")
+            query_debug.append(_job_error_debug_row(seller_id, use_item_sales, start_date, end_date, exc))
 
     db_by_source = pd.concat(db_parts, ignore_index=True) if db_parts else pd.DataFrame()
     result = compare_platform_to_db_sources(

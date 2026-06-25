@@ -14,6 +14,7 @@ from dq_checker.db import DbCredentials, load_clients
 
 
 ROOT = Path(__file__).resolve().parents[1]
+APP_VERSION = os.getenv("RENDER_GIT_COMMIT", os.getenv("VERCEL_GIT_COMMIT_SHA", "local"))[:12]
 
 
 def _writable_output_dir() -> Path:
@@ -58,7 +59,7 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "version": APP_VERSION}
 
 
 @app.get("/api/runtime")
@@ -66,6 +67,7 @@ def runtime() -> dict[str, str]:
     return {
         "status": "ok",
         "entrypoint": "backend/main.py",
+        "version": APP_VERSION,
         "output_dir": str(OUTPUTS),
         "dq_output_dir_env": os.getenv("DQ_OUTPUT_DIR", ""),
     }
@@ -132,6 +134,7 @@ async def batch_db(
         report_name = Path(result["report_path"]).name
         result["report_name"] = report_name
         result["download_url"] = f"/api/download/{report_name}"
+        result["api_version"] = APP_VERSION
         return result
     except HTTPException:
         raise
