@@ -45,15 +45,52 @@ def _connect(credentials: DbCredentials):
     )
 
 
+def _table_columns(conn, table_name: str) -> set[str]:
+    query = """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = %s
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(query, (table_name,))
+        return {row[0] for row in cursor.fetchall()}
+
+
+def _seller_expr_for_table(conn, table_name: str, fallback_id_col: str | None = None) -> str:
+    columns = _table_columns(conn, table_name)
+    for direct_col in ("seller", "seller_id", "seller_used_id", "used_id"):
+        if direct_col in columns:
+            return direct_col
+    if "fk_seller_used_id" in columns:
+        return """
+            CONCAT(
+                split_part(fk_seller_used_id, '.', 1), '.',
+                split_part(fk_seller_used_id, '.', 2), '.',
+                split_part(fk_seller_used_id, '.', 3)
+            )
+        """
+    if fallback_id_col is None:
+        for candidate in ("fk_sku_used_id", "fk_seller_used_id", "used_id"):
+            if candidate in columns:
+                fallback_id_col = candidate
+                break
+    if fallback_id_col is None:
+        raise ValueError(f"Khong tim thay seller key trong table {table_name}. Columns: {sorted(columns)}")
+    return f"""
+        CONCAT(
+            split_part({fallback_id_col}, '.', 1), '.',
+            split_part({fallback_id_col}, '.', 2), '.',
+            split_part({fallback_id_col}, '.', 3)
+        )
+    """
+
+
 QUERY_DEFINITIONS = {
     "seller_sales": {
         "sql": """
             SELECT
-                CONCAT(
-                    split_part(fk_seller_used_id, '.', 1), '.',
-                    split_part(fk_seller_used_id, '.', 2), '.',
-                    split_part(fk_seller_used_id, '.', 3)
-                ) AS seller_id,
+                __SELLER_EXPR__ AS seller_id,
                 day::date AS day,
                 COALESCE(source, 'NULL_SOURCE') AS source,
                 SUM(quantity) AS quantity,
@@ -61,46 +98,42 @@ QUERY_DEFINITIONS = {
                 NULL::numeric AS page_view
             FROM ecommerce_export_seller_sales
             WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
-              AND CONCAT(
-                    split_part(fk_seller_used_id, '.', 1), '.',
-                    split_part(fk_seller_used_id, '.', 2), '.',
-                    split_part(fk_seller_used_id, '.', 3)
-                  ) = %(seller_id)s
+              AND __SELLER_EXPR__ = %(seller_id)s
             GROUP BY 1, 2, 3
         """,
         "level": "seller",
+        "table": "ecommerce_export_seller_sales",
+        "fallback_id_col": "fk_seller_used_id",
     },
     "item_seller_sales": {
         "sql": """
             SELECT
-                seller_used_id AS seller_id,
+                __SELLER_EXPR__ AS seller_id,
                 day::date AS day,
                 COALESCE(source, 'NULL_SOURCE') AS source,
                 SUM(quantity) AS quantity,
                 SUM(
                     CASE
-                        WHEN split_part(seller_used_id, '.', 2) = 'LAZ' THEN s_net
-                        WHEN split_part(seller_used_id, '.', 2) IN ('SHP', 'TTK') THEN s_paid
+                        WHEN split_part(__SELLER_EXPR__, '.', 2) = 'LAZ' THEN s_net
+                        WHEN split_part(__SELLER_EXPR__, '.', 2) IN ('SHP', 'TTK') THEN s_paid
                         ELSE COALESCE(s_paid, s_net, s_onsite_selling, s_seller_selling, 0)
                     END
                 ) AS revenue,
                 NULL::numeric AS page_view
             FROM ecommerce_item
             WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
-              AND seller_used_id = %(seller_id)s
+              AND __SELLER_EXPR__ = %(seller_id)s
             GROUP BY 1, 2, 3
         """,
         "level": "seller",
         "as_data_type": "seller_sales",
+        "table": "ecommerce_item",
+        "fallback_id_col": "fk_sku_used_id",
     },
     "seller_traffic": {
         "sql": """
             SELECT
-                CONCAT(
-                    split_part(fk_seller_used_id, '.', 1), '.',
-                    split_part(fk_seller_used_id, '.', 2), '.',
-                    split_part(fk_seller_used_id, '.', 3)
-                ) AS seller_id,
+                __SELLER_EXPR__ AS seller_id,
                 day::date AS day,
                 COALESCE(source, 'NULL_SOURCE') AS source,
                 NULL::numeric AS quantity,
@@ -108,23 +141,17 @@ QUERY_DEFINITIONS = {
                 SUM(page_view) AS page_view
             FROM ecommerce_export_seller_traffic
             WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
-              AND CONCAT(
-                    split_part(fk_seller_used_id, '.', 1), '.',
-                    split_part(fk_seller_used_id, '.', 2), '.',
-                    split_part(fk_seller_used_id, '.', 3)
-                  ) = %(seller_id)s
+              AND __SELLER_EXPR__ = %(seller_id)s
             GROUP BY 1, 2, 3
         """,
         "level": "seller",
+        "table": "ecommerce_export_seller_traffic",
+        "fallback_id_col": "fk_seller_used_id",
     },
     "sku_sales": {
         "sql": """
             SELECT
-                CONCAT(
-                    split_part(fk_sku_used_id, '.', 1), '.',
-                    split_part(fk_sku_used_id, '.', 2), '.',
-                    split_part(fk_sku_used_id, '.', 3)
-                ) AS seller_id,
+                __SELLER_EXPR__ AS seller_id,
                 day::date AS day,
                 COALESCE(source, 'NULL_SOURCE') AS source,
                 SUM(quantity) AS quantity,
@@ -132,46 +159,42 @@ QUERY_DEFINITIONS = {
                 NULL::numeric AS page_view
             FROM ecommerce_export_sku_sales
             WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
-              AND CONCAT(
-                    split_part(fk_sku_used_id, '.', 1), '.',
-                    split_part(fk_sku_used_id, '.', 2), '.',
-                    split_part(fk_sku_used_id, '.', 3)
-                  ) = %(seller_id)s
+              AND __SELLER_EXPR__ = %(seller_id)s
             GROUP BY 1, 2, 3
         """,
         "level": "sku",
+        "table": "ecommerce_export_sku_sales",
+        "fallback_id_col": "fk_sku_used_id",
     },
     "item_sku_sales": {
         "sql": """
             SELECT
-                seller_used_id AS seller_id,
+                __SELLER_EXPR__ AS seller_id,
                 day::date AS day,
                 COALESCE(source, 'NULL_SOURCE') AS source,
                 SUM(quantity) AS quantity,
                 SUM(
                     CASE
-                        WHEN split_part(seller_used_id, '.', 2) = 'LAZ' THEN s_net
-                        WHEN split_part(seller_used_id, '.', 2) IN ('SHP', 'TTK') THEN s_paid
+                        WHEN split_part(__SELLER_EXPR__, '.', 2) = 'LAZ' THEN s_net
+                        WHEN split_part(__SELLER_EXPR__, '.', 2) IN ('SHP', 'TTK') THEN s_paid
                         ELSE COALESCE(s_paid, s_net, s_onsite_selling, s_seller_selling, s_net, 0)
                     END
                 ) AS revenue,
                 NULL::numeric AS page_view
             FROM ecommerce_item
             WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
-              AND seller_used_id = %(seller_id)s
+              AND __SELLER_EXPR__ = %(seller_id)s
             GROUP BY 1, 2, 3
         """,
         "level": "sku",
         "as_data_type": "sku_sales",
+        "table": "ecommerce_item",
+        "fallback_id_col": "fk_sku_used_id",
     },
     "sku_traffic": {
         "sql": """
             SELECT
-                CONCAT(
-                    split_part(fk_sku_used_id, '.', 1), '.',
-                    split_part(fk_sku_used_id, '.', 2), '.',
-                    split_part(fk_sku_used_id, '.', 3)
-                ) AS seller_id,
+                __SELLER_EXPR__ AS seller_id,
                 day::date AS day,
                 COALESCE(source, 'NULL_SOURCE') AS source,
                 NULL::numeric AS quantity,
@@ -179,14 +202,12 @@ QUERY_DEFINITIONS = {
                 SUM(page_view) AS page_view
             FROM ecommerce_export_sku_traffic
             WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
-              AND CONCAT(
-                    split_part(fk_sku_used_id, '.', 1), '.',
-                    split_part(fk_sku_used_id, '.', 2), '.',
-                    split_part(fk_sku_used_id, '.', 3)
-                  ) = %(seller_id)s
+              AND __SELLER_EXPR__ = %(seller_id)s
             GROUP BY 1, 2, 3
         """,
         "level": "sku",
+        "table": "ecommerce_export_sku_traffic",
+        "fallback_id_col": "fk_sku_used_id",
     },
 }
 
@@ -210,7 +231,11 @@ def query_seller_sources(
                 continue
             if wanted_level in ("seller", "sku") and definition["level"] != wanted_level:
                 continue
-            df = pd.read_sql_query(definition["sql"], conn, params=params)
+            sql = definition["sql"]
+            if "__SELLER_EXPR__" in sql:
+                seller_expr = _seller_expr_for_table(conn, definition["table"], definition["fallback_id_col"])
+                sql = sql.replace("__SELLER_EXPR__", seller_expr)
+            df = pd.read_sql_query(sql, conn, params=params)
             if df.empty:
                 continue
             df.insert(0, "data_type", definition.get("as_data_type", data_type))
