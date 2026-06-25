@@ -28,6 +28,15 @@ function number(value) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+const SELLER_COLORS = ['#E8F3FF', '#EAF8EE', '#FFF4DE', '#F3EAFE', '#FFEAEA', '#E9F7F8', '#F8F0E7', '#EEF2FF'];
+
+function sellerColor(sellerId) {
+  const text = String(sellerId || '');
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) hash = (hash + text.charCodeAt(i)) % 997;
+  return SELLER_COLORS[hash % SELLER_COLORS.length];
+}
+
 function App() {
   const [clients, setClients] = useState(['darlie', 'loreal_group_ph', 'nestle_purina']);
   const [client, setClient] = useState('darlie');
@@ -192,9 +201,9 @@ function App() {
                 <tbody>
                   {!result && <tr><td colSpan="10">Upload files to start.</td></tr>}
                   {(result?.comparison || []).map((row, i) => (
-                    <tr key={`${row.seller_id}-${row.period}-${row.data_type}-${row.metric}-${i}`}>
+                    <tr key={`${row.seller_id}-${row.period}-${row.data_type}-${row.metric}-${i}`} style={{ background: sellerColor(row.seller_id) }}>
                       <td className={`status ${row.status}`}>{row.status}</td>
-                      <td>{row.seller_id}</td>
+                      <td><span className="seller-badge">{row.seller_id}</span></td>
                       <td>{row.period}</td>
                       <td>{row.data_level}</td>
                       <td>{row.data_type}</td>

@@ -218,3 +218,5 @@ Generated batch reports include:
 - `Raw_DB_By_Source`
 - `Column_Mapping`
 - `Errors`
+
+Rows in the main report sheets are color-coded by `seller_id`. For large batches, the report also creates per-seller tabs for the first 20 sellers with wrong data, named like `S_ID.SHP...`.

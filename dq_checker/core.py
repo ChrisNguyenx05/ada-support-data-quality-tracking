@@ -9,10 +9,23 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from openpyxl.styles import PatternFill
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "metric_mapping.json"
+SELLER_COLORS = [
+    "E8F3FF",
+    "EAF8EE",
+    "FFF4DE",
+    "F3EAFE",
+    "FFEAEA",
+    "E9F7F8",
+    "F8F0E7",
+    "EEF2FF",
+    "F1F5D8",
+    "FCEBFA",
+]
 
 
 @dataclass
@@ -268,6 +281,36 @@ def _is_close(left: float, right: float, metric: str, canonical: dict[str, Any])
     return abs(diff) <= tolerance_abs or abs(pct) <= tolerance_pct
 
 
+def _safe_sheet_name(value: Any, prefix: str = "") -> str:
+    text = _clean_name(value) or "blank"
+    text = re.sub(r"[\[\]:*?/\\]", "_", text)
+    return f"{prefix}{text}"[:31]
+
+
+def _style_workbook_by_seller(writer: pd.ExcelWriter, sheet_names: list[str]) -> None:
+    seller_colors: dict[str, str] = {}
+    for sheet_name in sheet_names:
+        worksheet = writer.sheets.get(sheet_name)
+        if worksheet is None:
+            continue
+        headers = [cell.value for cell in worksheet[1]]
+        if "seller_id" not in headers:
+            continue
+        seller_col = headers.index("seller_id") + 1
+        worksheet.freeze_panes = "A2"
+        worksheet.auto_filter.ref = worksheet.dimensions
+        for row in range(2, worksheet.max_row + 1):
+            seller_id = worksheet.cell(row=row, column=seller_col).value
+            if not seller_id:
+                continue
+            seller_id = str(seller_id)
+            if seller_id not in seller_colors:
+                seller_colors[seller_id] = SELLER_COLORS[len(seller_colors) % len(SELLER_COLORS)]
+            fill = PatternFill("solid", fgColor=seller_colors[seller_id])
+            for col in range(1, worksheet.max_column + 1):
+                worksheet.cell(row=row, column=col).fill = fill
+
+
 def compare_platform_to_db_sources(
     platform_norm: pd.DataFrame,
     db_by_source: pd.DataFrame,
@@ -437,6 +480,27 @@ def compare_platform_to_db_sources(
         (detail[detail["status"] == "match"] if "status" in detail.columns else detail).to_excel(writer, sheet_name="Matched", index=False)
         platform_norm.to_excel(writer, sheet_name="Raw_Platform_Normalized", index=False)
         db.to_excel(writer, sheet_name="Raw_DB_By_Source", index=False)
+        per_seller_sheet_names = []
+        if not wrong_detail.empty and "seller_id" in wrong_detail.columns:
+            for seller_id, seller_rows in list(wrong_detail.groupby("seller_id", dropna=False))[:20]:
+                sheet_name = _safe_sheet_name(seller_id, "S_")
+                seller_rows.to_excel(writer, sheet_name=sheet_name, index=False)
+                per_seller_sheet_names.append(sheet_name)
+        _style_workbook_by_seller(
+            writer,
+            [
+                "Wrong_Data_Detail",
+                "Source_Investigation",
+                "Source_Check_Detail",
+                "Duplicate_Source",
+                "Missing_In_DB",
+                "Mismatch_Value",
+                "Matched",
+                "Raw_Platform_Normalized",
+                "Raw_DB_By_Source",
+                *per_seller_sheet_names,
+            ],
+        )
 
     return {
         "summary": summary.to_dict(orient="records"),
