@@ -34,6 +34,7 @@ function App() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [range, setRange] = useState(setQuickRange(7));
+  const [dataLevel, setDataLevel] = useState('sku');
   const [files, setFiles] = useState([]);
   const [mapping, setMapping] = useState([]);
   const [result, setResult] = useState(null);
@@ -77,6 +78,7 @@ function App() {
       form.append('start_date', range.startDate);
       form.append('end_date', range.endDate);
       form.append('granularity', range.granularity);
+      form.append('data_level', dataLevel);
       form.append('mapping_json', JSON.stringify(mapping));
       files.forEach((file) => form.append('platform_files', file));
 
@@ -130,11 +132,16 @@ function App() {
               <button type="button" onClick={() => setRange(setQuickRange(30))}>1 Month</button>
             </div>
 
-            <label>Granularity</label>
-            <select value={range.granularity} onChange={(e) => setRange({ ...range, granularity: e.target.value })}>
-              <option value="day">Daily</option>
-              <option value="week">Weekly</option>
-              <option value="month">Monthly</option>
+            <label>Compare detail</label>
+            <select value="day" disabled>
+              <option value="day">Daily rows inside selected range</option>
+            </select>
+
+            <label>Check level</label>
+            <select value={dataLevel} onChange={(e) => setDataLevel(e.target.value)}>
+              <option value="sku">SKU only</option>
+              <option value="seller">Seller only</option>
+              <option value="both">Seller + SKU</option>
             </select>
 
             <label>Platform exports</label>

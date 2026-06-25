@@ -92,6 +92,7 @@ async def batch_db(
     start_date: str = Form(...),
     end_date: str = Form(...),
     granularity: str = Form("day"),
+    data_level: str = Form("sku"),
     mapping_json: str = Form(...),
     platform_files: list[UploadFile] = File(...),
 ) -> dict:
@@ -125,6 +126,7 @@ async def batch_db(
             end_date=end_date,
             granularity=granularity,
             output_dir=OUTPUTS,
+            data_level=data_level,
         )
         report_name = Path(result["report_path"]).name
         result["report_name"] = report_name

@@ -31,10 +31,11 @@ The generated Excel report includes comparison rows, normalized data, duplicate 
 2. Double-click `run_tool.bat`.
 3. Open `http://127.0.0.1:8765` if the browser does not open automatically.
 4. Choose client, enter DB username/password, date range, and granularity.
-5. Upload multiple platform Excel files.
-6. Fill the mapping table: file name, seller ID, platform, optional sheet.
-7. Click `Run batch check`.
-8. Download the generated report from the result screen.
+5. Choose check level: `SKU only`, `Seller only`, or `Seller + SKU`.
+6. Upload multiple platform Excel files.
+7. Fill the mapping table: file name, seller ID, platform, optional sheet.
+8. Click `Run batch check`.
+9. Download the generated report from the result screen.
 
 The DB password is only used for the current run and is not saved.
 
@@ -179,6 +180,10 @@ For every uploaded seller file, the tool queries:
 
 It filters by the seller ID you enter in the upload mapping table and the selected date range.
 
+Use `SKU only` to query only SKU sales/traffic tables. Use `Seller only` to query only seller sales/traffic tables. This reduces query time for daily batches.
+
+Week and month buttons only control the date range. The comparison is always by daily rows inside that selected range, so source investigation stays day-by-day.
+
 ## Source Check Logic
 
 For each seller, period, level, data type, and metric, the report checks:
@@ -197,6 +202,7 @@ Generated batch reports include:
 
 - `Summary`
 - `Wrong_Data_Detail`
+- `Source_Investigation`
 - `Source_Check_Detail`
 - `Duplicate_Source`
 - `Missing_In_DB`

@@ -16,6 +16,7 @@ def run_db_batch(
     end_date: str,
     granularity: str,
     output_dir: Path,
+    data_level: str = "both",
 ) -> dict[str, Any]:
     platform_parts: list[pd.DataFrame] = []
     mappings: list[dict[str, str]] = []
@@ -23,7 +24,7 @@ def run_db_batch(
 
     for spec in specs:
         try:
-            platform_norm, file_mappings, file_errors = read_platform_file(spec, granularity)
+            platform_norm, file_mappings, file_errors = read_platform_file(spec, "day")
             platform_parts.append(platform_norm)
             mappings.extend(file_mappings)
             errors.extend(file_errors)
@@ -37,12 +38,12 @@ def run_db_batch(
     db_parts: list[pd.DataFrame] = []
     for seller_id in sorted({spec.seller_id for spec in specs if spec.seller_id.strip()}):
         try:
-            db_parts.append(query_seller_sources(credentials, seller_id, start_date, end_date))
+            db_parts.append(query_seller_sources(credentials, seller_id, start_date, end_date, data_level=data_level))
         except Exception as exc:
             errors.append(f"{seller_id}: {exc}")
 
     db_by_source = pd.concat(db_parts, ignore_index=True) if db_parts else pd.DataFrame()
-    result = compare_platform_to_db_sources(platform_norm, db_by_source, granularity, output_dir)
+    result = compare_platform_to_db_sources(platform_norm, db_by_source, "day", output_dir, data_level=data_level)
 
     report_path = Path(result["report_path"])
     with pd.ExcelWriter(report_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:

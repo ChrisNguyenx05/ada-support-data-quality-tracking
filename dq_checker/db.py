@@ -150,11 +150,15 @@ def query_seller_sources(
     seller_id: str,
     start_date: str,
     end_date: str,
+    data_level: str = "both",
 ) -> pd.DataFrame:
     params = {"seller_id": seller_id, "start_date": start_date, "end_date": end_date}
     frames: list[pd.DataFrame] = []
+    wanted_level = (data_level or "both").lower()
     with _connect(credentials) as conn:
         for data_type, definition in QUERY_DEFINITIONS.items():
+            if wanted_level in ("seller", "sku") and definition["level"] != wanted_level:
+                continue
             df = pd.read_sql_query(definition["sql"], conn, params=params)
             if df.empty:
                 continue

@@ -113,11 +113,15 @@ HTML = r"""<!doctype html>
           <button type="button" id="oneWeek">1 Week</button>
           <button type="button" id="oneMonth">1 Month</button>
         </div>
-        <label>Granularity</label>
+        <label>Compare detail</label>
         <select name="granularity" id="granularity">
-          <option value="day">Daily</option>
-          <option value="week">Weekly</option>
-          <option value="month">Monthly</option>
+          <option value="day">Daily rows inside selected range</option>
+        </select>
+        <label>Check level</label>
+        <select name="data_level">
+          <option value="sku">SKU only</option>
+          <option value="seller">Seller only</option>
+          <option value="both">Seller + SKU</option>
         </select>
         <label>Platform exports (.xlsx/.csv, multi-select)</label>
         <input type="file" id="platformFiles" name="platform_files" multiple required>
@@ -304,6 +308,7 @@ class Handler(BaseHTTPRequestHandler):
                     end_date=form.getfirst("end_date") or "",
                     granularity=form.getfirst("granularity") or "day",
                     output_dir=OUTPUTS,
+                    data_level=form.getfirst("data_level") or "sku",
                 )
                 self._send(200, json.dumps(result, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
                 return

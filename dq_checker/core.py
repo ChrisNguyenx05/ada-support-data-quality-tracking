@@ -272,6 +272,7 @@ def compare_platform_to_db_sources(
     db_by_source: pd.DataFrame,
     granularity: str,
     output_dir: Path | None = None,
+    data_level: str = "both",
 ) -> dict[str, Any]:
     config = load_config()
     canonical = config["canonical_metrics"]
@@ -303,14 +304,19 @@ def compare_platform_to_db_sources(
     detail_rows: list[dict[str, Any]] = []
     source_rows: list[dict[str, Any]] = []
     target_index = platform_agg.set_index(["seller_id", "period"])
-    expected_types = pd.DataFrame(
-        [
-            {"data_level": "seller", "data_type": "seller_sales"},
-            {"data_level": "seller", "data_type": "seller_traffic"},
-            {"data_level": "sku", "data_type": "sku_sales"},
-            {"data_level": "sku", "data_type": "sku_traffic"},
-        ]
-    )
+    expected_rows = [
+        {"data_level": "seller", "data_type": "seller_sales"},
+        {"data_level": "seller", "data_type": "seller_traffic"},
+        {"data_level": "sku", "data_type": "sku_sales"},
+        {"data_level": "sku", "data_type": "sku_traffic"},
+    ]
+    wanted_level = (data_level or "both").lower()
+    if wanted_level in ("seller", "sku"):
+        expected_rows = [row for row in expected_rows if row["data_level"] == wanted_level]
+        db = db[db["data_level"] == wanted_level].copy() if not db.empty else db
+        db_all = db_all[db_all["data_level"] == wanted_level].copy() if not db_all.empty else db_all
+        db_source = db_source[db_source["data_level"] == wanted_level].copy() if not db_source.empty else db_source
+    expected_types = pd.DataFrame(expected_rows)
     platform_keys = platform_agg[["seller_id", "period"]].drop_duplicates()
     db_keys = platform_keys.merge(expected_types, how="cross")
 
@@ -353,6 +359,7 @@ def compare_platform_to_db_sources(
                 source_match = _is_close(platform_value, source_value, metric, canonical)
                 if source_match:
                     matching_sources.append(str(source_row["source"]))
+                source_diff = source_value - platform_value
                 source_rows.append(
                     {
                         "seller_id": seller_id,
@@ -363,6 +370,8 @@ def compare_platform_to_db_sources(
                         "source": source_row["source"],
                         "source_value": source_value,
                         "platform_value": platform_value,
+                        "source_diff": source_diff,
+                        "source_accuracy": source_value / platform_value if platform_value else (1 if source_value == 0 else 0),
                         "source_match": source_match,
                     }
                 )
@@ -399,6 +408,11 @@ def compare_platform_to_db_sources(
 
     detail = pd.DataFrame(detail_rows)
     source_detail = pd.DataFrame(source_rows)
+    if not source_detail.empty:
+        source_detail["investigation_note"] = source_detail.apply(
+            lambda row: "MATCH_UI" if row["source_match"] else ("OVER_UI" if row["source_value"] > row["platform_value"] else "UNDER_UI"),
+            axis=1,
+        )
     duplicate_source = (
         db.groupby(["seller_id", "period", "data_level", "data_type"], dropna=False)["source"]
         .nunique()
@@ -414,6 +428,7 @@ def compare_platform_to_db_sources(
         summary.to_excel(writer, sheet_name="Summary", index=False)
         wrong_detail = detail[detail["status"] != "match"] if "status" in detail.columns else detail
         wrong_detail.to_excel(writer, sheet_name="Wrong_Data_Detail", index=False)
+        source_detail.to_excel(writer, sheet_name="Source_Investigation", index=False)
         source_detail.to_excel(writer, sheet_name="Source_Check_Detail", index=False)
         duplicate_source.to_excel(writer, sheet_name="Duplicate_Source", index=False)
         (detail[detail["status"] == "missing_in_db"] if "status" in detail.columns else detail).to_excel(writer, sheet_name="Missing_In_DB", index=False)
