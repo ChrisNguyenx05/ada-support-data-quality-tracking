@@ -47,6 +47,7 @@ function App() {
   const [files, setFiles] = useState([]);
   const [mapping, setMapping] = useState([]);
   const [result, setResult] = useState(null);
+  const [selectedMetric, setSelectedMetric] = useState('all');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -60,6 +61,17 @@ function App() {
   const summary = useMemo(() => {
     return Object.fromEntries((result?.summary || []).map((row) => [row.status, row.count]));
   }, [result]);
+
+  const metricOptions = useMemo(() => {
+    const metrics = new Set((result?.comparison || []).map((row) => row.metric).filter(Boolean));
+    return ['all', ...Array.from(metrics).sort()];
+  }, [result]);
+
+  const filteredComparison = useMemo(() => {
+    const rows = result?.comparison || [];
+    if (selectedMetric === 'all') return rows;
+    return rows.filter((row) => row.metric === selectedMetric);
+  }, [result, selectedMetric]);
 
   function onFiles(nextFiles) {
     const list = [...nextFiles];
@@ -78,6 +90,7 @@ function App() {
     event.preventDefault();
     setError('');
     setResult(null);
+    setSelectedMetric('all');
     setLoading(true);
     try {
       const form = new FormData();
@@ -195,12 +208,31 @@ function App() {
             ))}
           </div>
           <div className="content">
+            {result && (
+              <div className="result-tools">
+                <span>Metric</span>
+                <div className="segmented">
+                  {metricOptions.map((metric) => (
+                    <button
+                      key={metric}
+                      type="button"
+                      className={selectedMetric === metric ? 'active' : ''}
+                      onClick={() => setSelectedMetric(metric)}
+                    >
+                      {metric === 'all' ? 'All' : metric}
+                    </button>
+                  ))}
+                </div>
+                <span>{filteredComparison.length} rows</span>
+              </div>
+            )}
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Status</th><th>Seller</th><th>Period</th><th>Level</th><th>Type</th><th>Metric</th><th>Platform</th><th>DB all sources</th><th>Diff</th><th>Matching source</th></tr></thead>
                 <tbody>
                   {!result && <tr><td colSpan="10">Upload files to start.</td></tr>}
-                  {(result?.comparison || []).map((row, i) => (
+                  {result && filteredComparison.length === 0 && <tr><td colSpan="10">No rows for this metric.</td></tr>}
+                  {filteredComparison.map((row, i) => (
                     <tr key={`${row.seller_id}-${row.period}-${row.data_type}-${row.metric}-${i}`} style={{ background: sellerColor(row.seller_id) }}>
                       <td className={`status ${row.status}`}>{row.status}</td>
                       <td><span className="seller-badge">{row.seller_id}</span></td>

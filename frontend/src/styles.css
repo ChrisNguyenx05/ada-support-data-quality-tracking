@@ -177,6 +177,39 @@ button:disabled {
   padding: 0 16px 16px;
 }
 
+.result-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.segmented {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.segmented button {
+  width: auto;
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--blue);
+  background: #fff;
+  border-color: #bfd0ff;
+  font-size: 12px;
+}
+
+.segmented button.active {
+  color: #fff;
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

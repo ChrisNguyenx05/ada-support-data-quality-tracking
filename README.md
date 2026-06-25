@@ -220,3 +220,5 @@ Generated batch reports include:
 - `Errors`
 
 Rows in the main report sheets are color-coded by `seller_id`. For large batches, the report also creates per-seller tabs for the first 20 sellers with wrong data, named like `S_ID.SHP...`.
+
+After a run, the UI can filter the result table by metric (`quantity`, `revenue`, `page_view`) while keeping the summary cards as the full-batch overview.
