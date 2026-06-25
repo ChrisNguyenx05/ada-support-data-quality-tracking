@@ -12,6 +12,7 @@ from urllib.parse import unquote, urlparse
 from dq_checker.batch import run_db_batch
 from dq_checker.core import CompareOptions, SellerFileSpec, compare_files, save_upload, temp_upload_dir
 from dq_checker.db import DbCredentials
+from dq_checker.direct_query import run_direct_metric_query
 
 
 ROOT = Path(__file__).resolve().parent
@@ -275,11 +276,29 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, b"Not found")
 
     def do_POST(self) -> None:
-        if self.path not in ("/api/compare", "/api/batch-db"):
+        if self.path not in ("/api/compare", "/api/batch-db", "/api/query-data"):
             self._send(404, b"Not found")
             return
         try:
             form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={"REQUEST_METHOD": "POST"})
+            if self.path == "/api/query-data":
+                result = run_direct_metric_query(
+                    credentials=DbCredentials(
+                        client=form.getfirst("client") or "darlie",
+                        username=form.getfirst("username") or "",
+                        password=form.getfirst("password") or "",
+                    ),
+                    seller_id=form.getfirst("seller_id") or "",
+                    start_date=form.getfirst("start_date") or "",
+                    end_date=form.getfirst("end_date") or "",
+                    metric=form.getfirst("metric") or "all",
+                    output_dir=OUTPUTS,
+                    data_level=form.getfirst("data_level") or "both",
+                    use_item_sales=(form.getfirst("use_item_sales") or "").lower() in ("1", "true", "on", "yes"),
+                    query_flow=form.getfirst("query_flow") or "all",
+                )
+                self._send(200, json.dumps(result, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+                return
             if self.path == "/api/batch-db":
                 upload_dir = temp_upload_dir()
                 files_field = form["platform_files"]

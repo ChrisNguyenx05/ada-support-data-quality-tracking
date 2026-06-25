@@ -281,18 +281,22 @@ def query_seller_sources_with_debug(
     end_date: str,
     data_level: str = "both",
     use_item_sales: bool = False,
+    query_sources: list[str] | None = None,
 ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     params = {"seller_id": seller_id, "seller_id_like": f"{seller_id}.%", "start_date": start_date, "end_date": end_date}
     frames: list[pd.DataFrame] = []
     debug_rows: list[dict[str, Any]] = []
     wanted_level = (data_level or "both").lower()
+    wanted_sources = {source.strip().lower() for source in (query_sources or []) if source.strip()}
     with _connect(credentials) as conn:
         for data_type, definition in QUERY_DEFINITIONS.items():
-            if use_item_sales and data_type in ("seller_sales", "sku_sales"):
+            if wanted_sources and data_type.lower() not in wanted_sources:
                 continue
-            if not use_item_sales and data_type in ("item_seller_sales", "item_sku_sales"):
+            if not wanted_sources and use_item_sales and data_type in ("seller_sales", "sku_sales"):
                 continue
-            if wanted_level in ("seller", "sku") and definition["level"] != wanted_level:
+            if not wanted_sources and not use_item_sales and data_type in ("item_seller_sales", "item_sku_sales"):
+                continue
+            if not wanted_sources and wanted_level in ("seller", "sku") and definition["level"] != wanted_level:
                 continue
             sql = definition["sql"]
             if "__SELLER_EXPR__" in sql:

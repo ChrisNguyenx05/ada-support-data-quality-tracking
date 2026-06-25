@@ -43,15 +43,21 @@ function sellerColor(sellerId) {
 }
 
 function App() {
+  const [mode, setMode] = useState('query');
   const [clients, setClients] = useState(['darlie', 'loreal_group_ph', 'nestle_purina']);
   const [client, setClient] = useState('darlie');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [range, setRange] = useState(setQuickRange(7));
   const [dataLevel, setDataLevel] = useState('sku');
+  const [querySellerId, setQuerySellerId] = useState('');
+  const [queryMetric, setQueryMetric] = useState('all');
+  const [queryFlow, setQueryFlow] = useState('all');
+  const [queryUseItemSales, setQueryUseItemSales] = useState(false);
   const [files, setFiles] = useState([]);
   const [mapping, setMapping] = useState([]);
   const [result, setResult] = useState(null);
+  const [queryResult, setQueryResult] = useState(null);
   const [selectedMetric, setSelectedMetric] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedTable, setSelectedTable] = useState('all');
@@ -68,6 +74,9 @@ function App() {
   const summary = useMemo(() => {
     return Object.fromEntries((result?.summary || []).map((row) => [row.status, row.count]));
   }, [result]);
+
+  const queryRows = useMemo(() => queryResult?.by_day || [], [queryResult]);
+  const queryTotals = useMemo(() => queryResult?.summary || [], [queryResult]);
 
   const metricOptions = useMemo(() => {
     const metrics = new Set((result?.comparison || []).map((row) => row.metric).filter(Boolean));
@@ -144,7 +153,38 @@ function App() {
     }
   }
 
+  async function submitDirectQuery(event) {
+    event.preventDefault();
+    setError('');
+    setResult(null);
+    setQueryResult(null);
+    setLoading(true);
+    try {
+      const form = new FormData();
+      form.append('client', client);
+      form.append('username', username);
+      form.append('password', password);
+      form.append('seller_id', querySellerId);
+      form.append('metric', queryMetric);
+      form.append('query_flow', queryFlow);
+      form.append('start_date', range.startDate);
+      form.append('end_date', range.endDate);
+      form.append('data_level', dataLevel);
+      form.append('use_item_sales', queryUseItemSales ? 'true' : 'false');
+
+      const res = await fetch(`${API_BASE}/api/query-data`, { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.error || 'Query failed');
+      setQueryResult(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const downloadHref = result?.download_url ? `${API_BASE}${result.download_url}` : '';
+  const queryDownloadHref = queryResult?.download_url ? `${API_BASE}${queryResult.download_url}` : '';
 
   return (
     <div>
@@ -154,7 +194,12 @@ function App() {
       </header>
       <main>
         <aside>
-          <form onSubmit={submit}>
+          <div className="mode-switch">
+            <button type="button" className={mode === 'query' ? 'active' : ''} onClick={() => setMode('query')}>Query data</button>
+            <button type="button" className={mode === 'batch' ? 'active' : ''} onClick={() => setMode('batch')}>Batch check</button>
+          </div>
+
+          <form onSubmit={mode === 'query' ? submitDirectQuery : submit}>
             <label>Client</label>
             <select value={client} onChange={(e) => setClient(e.target.value)}>
               {clients.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -195,32 +240,69 @@ function App() {
               <option value="both">Seller + SKU</option>
             </select>
 
-            <label>Platform exports</label>
-            <input type="file" multiple onChange={(e) => onFiles(e.target.files)} required />
+            {mode === 'query' && (
+              <>
+                <label>Seller ID</label>
+                <input value={querySellerId} onChange={(e) => setQuerySellerId(e.target.value)} placeholder="TH.LAZ.100192131567" required />
 
-            <div className="mapping">
-              <table>
-                <thead><tr><th>File</th><th>Seller ID</th><th>Platform</th><th>Item?</th><th>Sheet</th></tr></thead>
-                <tbody>
-                  {mapping.length === 0 && <tr><td colSpan="5">Choose files first.</td></tr>}
-                  {mapping.map((row, i) => (
-                    <tr key={row.fileName}>
-                      <td>{row.fileName}</td>
-                      <td><input value={row.sellerId} onChange={(e) => updateMap(i, 'sellerId', e.target.value)} required /></td>
-                      <td>
-                        <select value={row.marketplace} onChange={(e) => updateMap(i, 'marketplace', e.target.value)}>
-                          <option>AUTO</option><option>SHP</option><option>LAZ</option><option>TTK</option>
-                        </select>
-                      </td>
-                      <td><input checked={row.useItemSales} onChange={(e) => updateMap(i, 'useItemSales', e.target.checked)} type="checkbox" /></td>
-                      <td><input value={row.sheet} onChange={(e) => updateMap(i, 'sheet', e.target.value)} placeholder="optional" /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                <label>Metric</label>
+                <select value={queryMetric} onChange={(e) => setQueryMetric(e.target.value)}>
+                  <option value="all">All</option>
+                  <option value="sales">Sales: quantity + revenue</option>
+                  <option value="traffic">Traffic: page_view</option>
+                  <option value="quantity">quantity</option>
+                  <option value="revenue">revenue</option>
+                  <option value="page_view">page_view</option>
+                </select>
 
-            <button disabled={loading || files.length === 0}>{loading ? 'Running...' : 'Run batch check'}</button>
+                <label>Query flow</label>
+                <select value={queryFlow} onChange={(e) => setQueryFlow(e.target.value)}>
+                  <option value="all">All flows</option>
+                  <option value="sku_traffic">SKU traffic</option>
+                  <option value="sku_sales">SKU sales</option>
+                  <option value="item_sku_sales">Item SKU sales</option>
+                  <option value="seller_sales">Seller sales</option>
+                  <option value="item_seller_sales">Item seller sales</option>
+                  <option value="seller_traffic">Seller traffic</option>
+                </select>
+
+                <label className="checkbox-row">
+                  <input checked={queryUseItemSales} onChange={(e) => setQueryUseItemSales(e.target.checked)} type="checkbox" />
+                  Use ecommerce_item for sales
+                </label>
+              </>
+            )}
+
+            {mode === 'batch' && (
+              <>
+                <label>Platform exports</label>
+                <input type="file" multiple onChange={(e) => onFiles(e.target.files)} required={mode === 'batch'} />
+
+                <div className="mapping">
+                  <table>
+                    <thead><tr><th>File</th><th>Seller ID</th><th>Platform</th><th>Item?</th><th>Sheet</th></tr></thead>
+                    <tbody>
+                      {mapping.length === 0 && <tr><td colSpan="5">Choose files first.</td></tr>}
+                      {mapping.map((row, i) => (
+                        <tr key={row.fileName}>
+                          <td>{row.fileName}</td>
+                          <td><input value={row.sellerId} onChange={(e) => updateMap(i, 'sellerId', e.target.value)} required={mode === 'batch'} /></td>
+                          <td>
+                            <select value={row.marketplace} onChange={(e) => updateMap(i, 'marketplace', e.target.value)}>
+                              <option>AUTO</option><option>SHP</option><option>LAZ</option><option>TTK</option>
+                            </select>
+                          </td>
+                          <td><input checked={row.useItemSales} onChange={(e) => updateMap(i, 'useItemSales', e.target.checked)} type="checkbox" /></td>
+                          <td><input value={row.sheet} onChange={(e) => updateMap(i, 'sheet', e.target.value)} placeholder="optional" /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            <button disabled={loading || (mode === 'batch' && files.length === 0)}>{loading ? 'Running...' : (mode === 'query' ? 'Query data' : 'Run batch check')}</button>
           </form>
           <p className="hint">Password is sent only to the backend for this run. Do not deploy the backend as a public app without access protection.</p>
         </aside>
@@ -228,21 +310,96 @@ function App() {
         <section>
           <div className="topbar">
             <strong>Result</strong>
-            {result?.api_version && <span>Backend: {result.api_version}</span>}
+            {(result?.api_version || queryResult?.api_version) && <span>Backend: {result?.api_version || queryResult?.api_version}</span>}
+            {queryDownloadHref && <a className="download" href={queryDownloadHref}>Download query</a>}
             {downloadHref && <a className="download" href={downloadHref}>Download report</a>}
           </div>
           {error && <div className="error">{error}</div>}
+          {queryResult && (
+            <>
+              <div className="cards">
+                {queryTotals.slice(0, 4).map((row, i) => (
+                  <div className="metric" key={`${row.data_level}-${row.data_type}-${row.metric}-${i}`}>
+                    <b>{number(row.value)}</b>
+                    <span>{row.data_level} / {row.data_type} / {row.metric}</span>
+                  </div>
+                ))}
+                {queryTotals.length === 0 && <div className="metric"><b>0</b><span>No data</span></div>}
+              </div>
+              <div className="content">
+                <details className="debug-panel">
+                  <summary>By source ({queryResult.by_source?.length || 0})</summary>
+                  <div className="table-wrap debug-wrap">
+                    <table>
+                      <thead><tr><th>Level</th><th>Type</th><th>Query table</th><th>Source</th><th>Metric</th><th>Value</th></tr></thead>
+                      <tbody>
+                        {(queryResult.by_source || []).map((row, i) => (
+                          <tr key={`${row.data_type}-${row.source}-${row.metric}-${i}`}>
+                            <td>{row.data_level}</td>
+                            <td>{row.data_type}</td>
+                            <td>{row.query_source_table}</td>
+                            <td>{row.source}</td>
+                            <td>{row.metric}</td>
+                            <td>{number(row.value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+                <details className="debug-panel">
+                  <summary>DB query debug ({queryResult.query_debug?.length || 0})</summary>
+                  <div className="table-wrap debug-wrap">
+                    <table>
+                      <thead><tr><th>Query table</th><th>Rows</th><th>Quantity</th><th>Revenue</th><th>Page view</th><th>Status</th><th>Error</th></tr></thead>
+                      <tbody>
+                        {(queryResult.query_debug || []).map((row, i) => (
+                          <tr key={`${row.query_source_table}-${i}`}>
+                            <td>{row.query_source_table}</td>
+                            <td>{number(row.row_count)}</td>
+                            <td>{number(row.quantity_sum)}</td>
+                            <td>{number(row.revenue_sum)}</td>
+                            <td>{number(row.page_view_sum)}</td>
+                            <td className={row.status === 'error' ? 'status mismatch' : 'status match'}>{row.status}</td>
+                            <td>{row.error}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+                <div className="table-wrap">
+                  <table>
+                    <thead><tr><th>Seller</th><th>Day</th><th>Level</th><th>Type</th><th>Metric</th><th>Value</th></tr></thead>
+                    <tbody>
+                      {queryRows.length === 0 && <tr><td colSpan="6">No data for selected inputs.</td></tr>}
+                      {queryRows.map((row, i) => (
+                        <tr key={`${row.seller_id}-${row.day}-${row.data_type}-${row.metric}-${i}`} style={{ background: sellerColor(row.seller_id) }}>
+                          <td><span className="seller-badge">{row.seller_id}</span></td>
+                          <td>{row.day}</td>
+                          <td>{row.data_level}</td>
+                          <td>{row.data_type}</td>
+                          <td>{row.metric}</td>
+                          <td>{number(row.value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
           {resultErrors.length > 0 && (
             <div className="error">
               <strong>Backend errors:</strong> {resultErrors.join(' | ')}
             </div>
           )}
-          <div className="cards">
+          {!queryResult && <div className="cards">
             {['match', 'mismatch', 'missing_in_db', 'suspicious_extra_source'].map((key) => (
               <div className="metric" key={key}><b className={key}>{summary[key] || 0}</b><span>{key}</span></div>
             ))}
-          </div>
-          <div className="content">
+          </div>}
+          {!queryResult && <div className="content">
             {result && (
               <div className="result-tools">
                 <div className="tool-group">
@@ -362,7 +519,7 @@ function App() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </div>}
         </section>
       </main>
     </div>

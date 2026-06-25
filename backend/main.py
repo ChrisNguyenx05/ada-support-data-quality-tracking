@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from dq_checker.batch import run_db_batch
 from dq_checker.core import SellerFileSpec
 from dq_checker.db import DbCredentials, load_clients
+from dq_checker.direct_query import run_direct_metric_query
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -138,6 +139,40 @@ async def batch_db(
         return result
     except HTTPException:
         raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/query-data")
+async def query_data(
+    client: str = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
+    seller_id: str = Form(...),
+    metric: str = Form("all"),
+    query_flow: str = Form("all"),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    data_level: str = Form("both"),
+    use_item_sales: bool = Form(False),
+) -> dict:
+    try:
+        result = run_direct_metric_query(
+            credentials=DbCredentials(client=client, username=username, password=password),
+            seller_id=seller_id,
+            start_date=start_date,
+            end_date=end_date,
+            metric=metric,
+            output_dir=OUTPUTS,
+            data_level=data_level,
+            use_item_sales=use_item_sales,
+            query_flow=query_flow,
+        )
+        report_name = Path(result["report_path"]).name
+        result["report_name"] = report_name
+        result["download_url"] = f"/api/download/{report_name}"
+        result["api_version"] = APP_VERSION
+        return result
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

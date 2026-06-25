@@ -119,6 +119,37 @@ button:disabled {
   color: var(--blue);
 }
 
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.mode-switch button {
+  margin: 0;
+  background: #fff;
+  color: var(--blue);
+  border-color: #bfd0ff;
+}
+
+.mode-switch button.active {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.checkbox-row input {
+  width: auto;
+}
+
 .mapping {
   margin-top: 14px;
   max-height: 270px;
