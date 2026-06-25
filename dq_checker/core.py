@@ -261,7 +261,7 @@ def read_platform_file(spec: SellerFileSpec, granularity: str) -> tuple[pd.DataF
             errors.append(f"{spec.file_path.name}/{sheet_name}: {exc}")
     if not parts:
         raise ValueError("Khong doc duoc platform file. " + " | ".join(errors))
-    return pd.concat(parts, ignore_index=True), mappings, errors
+    return pd.concat(parts, ignore_index=True), mappings, []
 
 
 def _to_period_from_day(series: pd.Series, granularity: str) -> pd.Series:
