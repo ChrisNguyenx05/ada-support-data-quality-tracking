@@ -9,6 +9,50 @@ from dq_checker.core import SellerFileSpec, compare_platform_to_db_sources, read
 from dq_checker.db import DbCredentials, query_seller_sources
 
 
+def _expected_query_tables_for_specs(specs: list[SellerFileSpec], data_level: str) -> list[dict[str, str]]:
+    wanted_level = (data_level or "both").lower()
+    rows: list[dict[str, str]] = []
+    for spec in specs:
+        seller_id = spec.seller_id.strip()
+        if not seller_id:
+            continue
+        if wanted_level in ("seller", "both"):
+            rows.append(
+                {
+                    "seller_id": seller_id,
+                    "data_level": "seller",
+                    "data_type": "seller_sales",
+                    "query_source_table": "item_seller_sales" if spec.use_item_sales else "seller_sales",
+                }
+            )
+            rows.append(
+                {
+                    "seller_id": seller_id,
+                    "data_level": "seller",
+                    "data_type": "seller_traffic",
+                    "query_source_table": "seller_traffic",
+                }
+            )
+        if wanted_level in ("sku", "both"):
+            rows.append(
+                {
+                    "seller_id": seller_id,
+                    "data_level": "sku",
+                    "data_type": "sku_sales",
+                    "query_source_table": "item_sku_sales" if spec.use_item_sales else "sku_sales",
+                }
+            )
+            rows.append(
+                {
+                    "seller_id": seller_id,
+                    "data_level": "sku",
+                    "data_type": "sku_traffic",
+                    "query_source_table": "sku_traffic",
+                }
+            )
+    return rows
+
+
 def run_db_batch(
     credentials: DbCredentials,
     specs: list[SellerFileSpec],
@@ -53,7 +97,14 @@ def run_db_batch(
             errors.append(f"{seller_id}: {exc}")
 
     db_by_source = pd.concat(db_parts, ignore_index=True) if db_parts else pd.DataFrame()
-    result = compare_platform_to_db_sources(platform_norm, db_by_source, "day", output_dir, data_level=data_level)
+    result = compare_platform_to_db_sources(
+        platform_norm,
+        db_by_source,
+        "day",
+        output_dir,
+        data_level=data_level,
+        expected_query_tables=_expected_query_tables_for_specs(specs, data_level),
+    )
 
     report_path = Path(result["report_path"])
     with pd.ExcelWriter(report_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:

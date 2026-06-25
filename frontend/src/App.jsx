@@ -48,6 +48,8 @@ function App() {
   const [mapping, setMapping] = useState([]);
   const [result, setResult] = useState(null);
   const [selectedMetric, setSelectedMetric] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedTable, setSelectedTable] = useState('all');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -67,11 +69,27 @@ function App() {
     return ['all', ...Array.from(metrics).sort()];
   }, [result]);
 
+  const statusOptions = useMemo(() => {
+    const statuses = new Set((result?.comparison || []).map((row) => row.status).filter(Boolean));
+    return ['all', ...Array.from(statuses).sort()];
+  }, [result]);
+
+  const tableOptions = useMemo(() => {
+    const tables = new Set((result?.comparison || []).map((row) => row.query_source_table || row.data_type).filter(Boolean));
+    return ['all', ...Array.from(tables).sort()];
+  }, [result]);
+
   const filteredComparison = useMemo(() => {
     const rows = result?.comparison || [];
-    if (selectedMetric === 'all') return rows;
-    return rows.filter((row) => row.metric === selectedMetric);
-  }, [result, selectedMetric]);
+    return rows.filter((row) => {
+      const rowTable = row.query_source_table || row.data_type;
+      return (
+        (selectedMetric === 'all' || row.metric === selectedMetric)
+        && (selectedStatus === 'all' || row.status === selectedStatus)
+        && (selectedTable === 'all' || rowTable === selectedTable)
+      );
+    });
+  }, [result, selectedMetric, selectedStatus, selectedTable]);
 
   function onFiles(nextFiles) {
     const list = [...nextFiles];
@@ -91,6 +109,8 @@ function App() {
     setError('');
     setResult(null);
     setSelectedMetric('all');
+    setSelectedStatus('all');
+    setSelectedTable('all');
     setLoading(true);
     try {
       const form = new FormData();
@@ -210,28 +230,46 @@ function App() {
           <div className="content">
             {result && (
               <div className="result-tools">
-                <span>Metric</span>
-                <div className="segmented">
-                  {metricOptions.map((metric) => (
-                    <button
-                      key={metric}
-                      type="button"
-                      className={selectedMetric === metric ? 'active' : ''}
-                      onClick={() => setSelectedMetric(metric)}
-                    >
-                      {metric === 'all' ? 'All' : metric}
-                    </button>
-                  ))}
+                <div className="tool-group">
+                  <span>Metric</span>
+                  <div className="segmented">
+                    {metricOptions.map((metric) => (
+                      <button
+                        key={metric}
+                        type="button"
+                        className={selectedMetric === metric ? 'active' : ''}
+                        onClick={() => setSelectedMetric(metric)}
+                      >
+                        {metric === 'all' ? 'All' : metric}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="tool-group compact">
+                  <span>Status</span>
+                  <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
+                    {statusOptions.map((status) => (
+                      <option key={status} value={status}>{status === 'all' ? 'All' : status}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="tool-group compact">
+                  <span>Query table</span>
+                  <select value={selectedTable} onChange={(e) => setSelectedTable(e.target.value)}>
+                    {tableOptions.map((table) => (
+                      <option key={table} value={table}>{table === 'all' ? 'All' : table}</option>
+                    ))}
+                  </select>
                 </div>
                 <span>{filteredComparison.length} rows</span>
               </div>
             )}
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Status</th><th>Seller</th><th>Period</th><th>Level</th><th>Type</th><th>Metric</th><th>Platform</th><th>DB all sources</th><th>Diff</th><th>Matching source</th></tr></thead>
+                <thead><tr><th>Status</th><th>Seller</th><th>Period</th><th>Level</th><th>Type</th><th>Query table</th><th>Metric</th><th>Platform</th><th>DB all sources</th><th>Diff</th><th>Matching source</th></tr></thead>
                 <tbody>
-                  {!result && <tr><td colSpan="10">Upload files to start.</td></tr>}
-                  {result && filteredComparison.length === 0 && <tr><td colSpan="10">No rows for this metric.</td></tr>}
+                  {!result && <tr><td colSpan="11">Upload files to start.</td></tr>}
+                  {result && filteredComparison.length === 0 && <tr><td colSpan="11">No rows for selected filters.</td></tr>}
                   {filteredComparison.map((row, i) => (
                     <tr key={`${row.seller_id}-${row.period}-${row.data_type}-${row.metric}-${i}`} style={{ background: sellerColor(row.seller_id) }}>
                       <td className={`status ${row.status}`}>{row.status}</td>
@@ -239,6 +277,7 @@ function App() {
                       <td>{row.period}</td>
                       <td>{row.data_level}</td>
                       <td>{row.data_type}</td>
+                      <td>{row.query_source_table || row.data_type}</td>
                       <td>{row.metric}</td>
                       <td>{number(row.platform_value)}</td>
                       <td>{number(row.db_all_sources)}</td>

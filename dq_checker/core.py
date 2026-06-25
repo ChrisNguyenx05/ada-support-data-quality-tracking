@@ -317,6 +317,7 @@ def compare_platform_to_db_sources(
     granularity: str,
     output_dir: Path | None = None,
     data_level: str = "both",
+    expected_query_tables: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     config = load_config()
     canonical = config["canonical_metrics"]
@@ -327,7 +328,9 @@ def compare_platform_to_db_sources(
 
     db = db_by_source.copy()
     if db.empty:
-        db = pd.DataFrame(columns=["data_type", "data_level", "seller_id", "day", "source", *metrics])
+        db = pd.DataFrame(columns=["data_type", "data_level", "query_source_table", "seller_id", "day", "source", *metrics])
+    if "query_source_table" not in db.columns:
+        db["query_source_table"] = db.get("data_type", "")
     db["period"] = _to_period_from_day(db["day"], granularity) if "day" in db.columns else pd.Series(dtype=str)
     for metric in metrics:
         if metric not in db.columns:
@@ -340,10 +343,23 @@ def compare_platform_to_db_sources(
         .reset_index()
     )
     db_source = (
-        db.groupby(["seller_id", "period", "data_level", "data_type", "source"], dropna=False)[metrics]
+        db.groupby(["seller_id", "period", "data_level", "data_type", "query_source_table", "source"], dropna=False)[metrics]
         .sum()
         .reset_index()
     )
+    query_table_lookup = (
+        db.dropna(subset=["seller_id", "period", "data_level", "data_type"])
+        .groupby(["seller_id", "period", "data_level", "data_type"], dropna=False)["query_source_table"]
+        .apply(lambda values: ", ".join(sorted({str(value) for value in values if str(value).strip()})))
+        .to_dict()
+        if not db.empty
+        else {}
+    )
+    expected_table_lookup = {
+        (str(row["seller_id"]), str(row["data_level"]), str(row["data_type"])): str(row["query_source_table"])
+        for row in (expected_query_tables or [])
+        if row.get("seller_id") and row.get("data_level") and row.get("data_type") and row.get("query_source_table")
+    }
 
     detail_rows: list[dict[str, Any]] = []
     source_rows: list[dict[str, Any]] = []
@@ -369,6 +385,10 @@ def compare_platform_to_db_sources(
         period = key["period"]
         data_level = key["data_level"]
         data_type = key["data_type"]
+        query_source_table = query_table_lookup.get(
+            (seller_id, period, data_level, data_type),
+            expected_table_lookup.get((seller_id, data_level, data_type), data_type),
+        )
         if (seller_id, period) not in target_index.index:
             continue
         target = target_index.loc[(seller_id, period)]
@@ -410,6 +430,7 @@ def compare_platform_to_db_sources(
                         "period": period,
                         "data_level": data_level,
                         "data_type": data_type,
+                        "query_source_table": source_row.get("query_source_table", query_source_table),
                         "metric": metric,
                         "source": source_row["source"],
                         "source_value": source_value,
@@ -438,6 +459,7 @@ def compare_platform_to_db_sources(
                     "period": period,
                     "data_level": data_level,
                     "data_type": data_type,
+                    "query_source_table": query_source_table,
                     "metric": metric,
                     "platform_value": platform_value,
                     "db_all_sources": db_value,
@@ -458,7 +480,7 @@ def compare_platform_to_db_sources(
             axis=1,
         )
     duplicate_source = (
-        db.groupby(["seller_id", "period", "data_level", "data_type"], dropna=False)["source"]
+        db.groupby(["seller_id", "period", "data_level", "data_type", "query_source_table"], dropna=False)["source"]
         .nunique()
         .reset_index(name="source_count")
         .query("source_count > 1")
