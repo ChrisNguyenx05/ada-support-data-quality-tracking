@@ -91,6 +91,8 @@ function App() {
     });
   }, [result, selectedMetric, selectedStatus, selectedTable]);
 
+  const queryDebug = useMemo(() => result?.query_debug || [], [result]);
+
   function onFiles(nextFiles) {
     const list = [...nextFiles];
     setFiles(list);
@@ -263,6 +265,37 @@ function App() {
                 </div>
                 <span>{filteredComparison.length} rows</span>
               </div>
+            )}
+            {queryDebug.length > 0 && (
+              <details className="debug-panel">
+                <summary>DB query debug ({queryDebug.length})</summary>
+                <div className="table-wrap debug-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Seller</th><th>Query table</th><th>Physical table</th><th>Rows</th><th>Quantity</th><th>Revenue</th><th>Page view</th><th>First day</th><th>Last day</th><th>Status</th><th>Error</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {queryDebug.map((row, i) => (
+                        <tr key={`${row.seller_id}-${row.query_source_table}-${i}`}>
+                          <td>{row.seller_id}</td>
+                          <td>{row.query_source_table}</td>
+                          <td>{row.physical_table}</td>
+                          <td>{number(row.row_count)}</td>
+                          <td>{number(row.quantity_sum)}</td>
+                          <td>{number(row.revenue_sum)}</td>
+                          <td>{number(row.page_view_sum)}</td>
+                          <td>{row.first_day}</td>
+                          <td>{row.last_day}</td>
+                          <td className={row.status === 'error' ? 'status mismatch' : 'status match'}>{row.status}</td>
+                          <td>{row.error}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             )}
             <div className="table-wrap">
               <table>

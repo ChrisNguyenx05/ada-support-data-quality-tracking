@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 
 from dq_checker.core import SellerFileSpec, compare_platform_to_db_sources, read_platform_file
-from dq_checker.db import DbCredentials, query_seller_sources
+from dq_checker.db import DbCredentials, query_seller_sources_with_debug
 
 
 def _expected_query_tables_for_specs(specs: list[SellerFileSpec], data_level: str) -> list[dict[str, str]]:
@@ -80,19 +80,20 @@ def run_db_batch(
 
     platform_norm = pd.concat(platform_parts, ignore_index=True)
     db_parts: list[pd.DataFrame] = []
+    query_debug: list[dict[str, Any]] = []
     query_jobs = sorted({(spec.seller_id, spec.use_item_sales) for spec in specs if spec.seller_id.strip()})
     for seller_id, use_item_sales in query_jobs:
         try:
-            db_parts.append(
-                query_seller_sources(
-                    credentials,
-                    seller_id,
-                    start_date,
-                    end_date,
-                    data_level=data_level,
-                    use_item_sales=use_item_sales,
-                )
+            db_frame, debug_rows = query_seller_sources_with_debug(
+                credentials,
+                seller_id,
+                start_date,
+                end_date,
+                data_level=data_level,
+                use_item_sales=use_item_sales,
             )
+            db_parts.append(db_frame)
+            query_debug.extend(debug_rows)
         except Exception as exc:
             errors.append(f"{seller_id}: {exc}")
 
@@ -110,6 +111,8 @@ def run_db_batch(
     with pd.ExcelWriter(report_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
         pd.DataFrame(mappings).to_excel(writer, sheet_name="Column_Mapping", index=False)
         pd.DataFrame({"error": errors}).to_excel(writer, sheet_name="Errors", index=False)
+        pd.DataFrame(query_debug).to_excel(writer, sheet_name="DB_Query_Debug", index=False)
 
     result["errors"] = errors
+    result["query_debug"] = query_debug
     return result

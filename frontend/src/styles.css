@@ -254,6 +254,23 @@ th {
   border-radius: 8px;
 }
 
+.debug-panel {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.debug-panel summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.debug-wrap {
+  max-height: 220px;
+}
+
 .status {
   font-weight: 700;
 }

@@ -270,8 +270,21 @@ def query_seller_sources(
     data_level: str = "both",
     use_item_sales: bool = False,
 ) -> pd.DataFrame:
+    df, _ = query_seller_sources_with_debug(credentials, seller_id, start_date, end_date, data_level, use_item_sales)
+    return df
+
+
+def query_seller_sources_with_debug(
+    credentials: DbCredentials,
+    seller_id: str,
+    start_date: str,
+    end_date: str,
+    data_level: str = "both",
+    use_item_sales: bool = False,
+) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     params = {"seller_id": seller_id, "seller_id_like": f"{seller_id}.%", "start_date": start_date, "end_date": end_date}
     frames: list[pd.DataFrame] = []
+    debug_rows: list[dict[str, Any]] = []
     wanted_level = (data_level or "both").lower()
     with _connect(credentials) as conn:
         for data_type, definition in QUERY_DEFINITIONS.items():
@@ -285,7 +298,45 @@ def query_seller_sources(
             if "__SELLER_EXPR__" in sql:
                 seller_expr = _seller_expr_for_table(conn, definition["table"], definition["fallback_id_col"])
                 sql = sql.replace("__SELLER_EXPR__", seller_expr)
-            df = pd.read_sql_query(sql, conn, params=params)
+            debug_row = {
+                "seller_id": seller_id,
+                "query_source_table": data_type,
+                "physical_table": definition["table"],
+                "data_level": definition["level"],
+                "data_type": definition.get("as_data_type", data_type),
+                "use_item_sales": use_item_sales,
+                "start_date": start_date,
+                "end_date": end_date,
+                "row_count": 0,
+                "quantity_sum": 0,
+                "revenue_sum": 0,
+                "page_view_sum": 0,
+                "first_day": "",
+                "last_day": "",
+                "source_sample": "",
+                "status": "ok",
+                "error": "",
+            }
+            try:
+                df = pd.read_sql_query(sql, conn, params=params)
+            except Exception as exc:
+                debug_row["status"] = "error"
+                debug_row["error"] = str(exc)
+                debug_rows.append(debug_row)
+                continue
+            debug_row["row_count"] = int(len(df))
+            if not df.empty:
+                for metric, debug_key in (("quantity", "quantity_sum"), ("revenue", "revenue_sum"), ("page_view", "page_view_sum")):
+                    if metric in df.columns:
+                        debug_row[debug_key] = float(pd.to_numeric(df[metric], errors="coerce").fillna(0).sum())
+                if "day" in df.columns:
+                    days = pd.to_datetime(df["day"], errors="coerce").dropna()
+                    if not days.empty:
+                        debug_row["first_day"] = str(days.min().date())
+                        debug_row["last_day"] = str(days.max().date())
+                if "source" in df.columns:
+                    debug_row["source_sample"] = ", ".join([str(item) for item in df["source"].dropna().astype(str).unique()[:5]])
+            debug_rows.append(debug_row)
             if df.empty:
                 continue
             df.insert(0, "data_type", definition.get("as_data_type", data_type))
@@ -293,5 +344,5 @@ def query_seller_sources(
             df.insert(2, "query_source_table", data_type)
             frames.append(df)
     if not frames:
-        return pd.DataFrame(columns=["data_type", "data_level", "query_source_table", "seller_id", "day", "source", "quantity", "revenue", "page_view"])
-    return pd.concat(frames, ignore_index=True)
+        return pd.DataFrame(columns=["data_type", "data_level", "query_source_table", "seller_id", "day", "source", "quantity", "revenue", "page_view"]), debug_rows
+    return pd.concat(frames, ignore_index=True), debug_rows
