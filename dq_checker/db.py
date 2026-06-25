@@ -108,21 +108,34 @@ QUERY_DEFINITIONS = {
     "item_seller_sales": {
         "sql": """
             SELECT
-                __SELLER_EXPR__ AS seller_id,
-                day::date AS day,
-                COALESCE(source, 'NULL_SOURCE') AS source,
-                SUM(quantity) AS quantity,
+                %(seller_id)s AS seller_id,
+                ei.day::date AS day,
+                COALESCE(ei.source, 'NULL_SOURCE') AS source,
+                SUM(ei.quantity) AS quantity,
                 SUM(
                     CASE
-                        WHEN split_part(__SELLER_EXPR__, '.', 2) = 'LAZ' THEN s_net
-                        WHEN split_part(__SELLER_EXPR__, '.', 2) IN ('SHP', 'TTK') THEN s_paid
-                        ELSE COALESCE(s_paid, s_net, s_onsite_selling, s_seller_selling, 0)
+                        WHEN split_part(COALESCE(ei.seller_used_id, sel.used_id), '.', 2) = 'LAZ' THEN ei.s_net
+                        WHEN split_part(COALESCE(ei.seller_used_id, sel.used_id), '.', 2) IN ('SHP', 'TTK') THEN ei.s_paid
+                        ELSE COALESCE(ei.s_paid, ei.s_net, ei.s_onsite_selling, ei.s_seller_selling, 0)
                     END
                 ) AS revenue,
                 NULL::numeric AS page_view
-            FROM ecommerce_item
-            WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
-              AND __SELLER_EXPR__ = %(seller_id)s
+            FROM ecommerce_item ei
+            LEFT JOIN ecommerce_sku sku
+                ON ei.fk_sku_used_id = sku.used_id
+            LEFT JOIN ecommerce_seller sel
+                ON sku.fk_seller_id = sel.id
+            WHERE ei.day BETWEEN %(start_date)s::date AND %(end_date)s::date
+              AND (
+                    ei.seller_used_id = %(seller_id)s
+                    OR sel.used_id = %(seller_id)s
+                    OR CONCAT(
+                        split_part(ei.fk_sku_used_id, '.', 1), '.',
+                        split_part(ei.fk_sku_used_id, '.', 2), '.',
+                        split_part(ei.fk_sku_used_id, '.', 3)
+                    ) = %(seller_id)s
+                    OR ei.fk_sku_used_id LIKE %(seller_id_like)s
+              )
             GROUP BY 1, 2, 3
         """,
         "level": "seller",
@@ -151,15 +164,27 @@ QUERY_DEFINITIONS = {
     "sku_sales": {
         "sql": """
             SELECT
-                __SELLER_EXPR__ AS seller_id,
-                day::date AS day,
-                COALESCE(source, 'NULL_SOURCE') AS source,
-                SUM(quantity) AS quantity,
-                SUM(s_onsite_selling) AS revenue,
+                %(seller_id)s AS seller_id,
+                ei.day::date AS day,
+                COALESCE(ei.source, 'NULL_SOURCE') AS source,
+                SUM(ei.quantity) AS quantity,
+                SUM(ei.s_onsite_selling) AS revenue,
                 NULL::numeric AS page_view
-            FROM ecommerce_export_sku_sales
-            WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
-              AND __SELLER_EXPR__ = %(seller_id)s
+            FROM ecommerce_export_sku_sales ei
+            LEFT JOIN ecommerce_sku sku
+                ON ei.fk_sku_used_id = sku.used_id
+            LEFT JOIN ecommerce_seller sel
+                ON sku.fk_seller_id = sel.id
+            WHERE ei.day BETWEEN %(start_date)s::date AND %(end_date)s::date
+              AND (
+                    sel.used_id = %(seller_id)s
+                    OR CONCAT(
+                        split_part(ei.fk_sku_used_id, '.', 1), '.',
+                        split_part(ei.fk_sku_used_id, '.', 2), '.',
+                        split_part(ei.fk_sku_used_id, '.', 3)
+                    ) = %(seller_id)s
+                    OR ei.fk_sku_used_id LIKE %(seller_id_like)s
+              )
             GROUP BY 1, 2, 3
         """,
         "level": "sku",
@@ -169,21 +194,34 @@ QUERY_DEFINITIONS = {
     "item_sku_sales": {
         "sql": """
             SELECT
-                __SELLER_EXPR__ AS seller_id,
-                day::date AS day,
-                COALESCE(source, 'NULL_SOURCE') AS source,
-                SUM(quantity) AS quantity,
+                %(seller_id)s AS seller_id,
+                ei.day::date AS day,
+                COALESCE(ei.source, 'NULL_SOURCE') AS source,
+                SUM(ei.quantity) AS quantity,
                 SUM(
                     CASE
-                        WHEN split_part(__SELLER_EXPR__, '.', 2) = 'LAZ' THEN s_net
-                        WHEN split_part(__SELLER_EXPR__, '.', 2) IN ('SHP', 'TTK') THEN s_paid
-                        ELSE COALESCE(s_paid, s_net, s_onsite_selling, s_seller_selling, s_net, 0)
+                        WHEN split_part(COALESCE(ei.seller_used_id, sel.used_id), '.', 2) = 'LAZ' THEN ei.s_net
+                        WHEN split_part(COALESCE(ei.seller_used_id, sel.used_id), '.', 2) IN ('SHP', 'TTK') THEN ei.s_paid
+                        ELSE COALESCE(ei.s_paid, ei.s_net, ei.s_onsite_selling, ei.s_seller_selling, 0)
                     END
                 ) AS revenue,
                 NULL::numeric AS page_view
-            FROM ecommerce_item
-            WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
-              AND __SELLER_EXPR__ = %(seller_id)s
+            FROM ecommerce_item ei
+            LEFT JOIN ecommerce_sku sku
+                ON ei.fk_sku_used_id = sku.used_id
+            LEFT JOIN ecommerce_seller sel
+                ON sku.fk_seller_id = sel.id
+            WHERE ei.day BETWEEN %(start_date)s::date AND %(end_date)s::date
+              AND (
+                    ei.seller_used_id = %(seller_id)s
+                    OR sel.used_id = %(seller_id)s
+                    OR CONCAT(
+                        split_part(ei.fk_sku_used_id, '.', 1), '.',
+                        split_part(ei.fk_sku_used_id, '.', 2), '.',
+                        split_part(ei.fk_sku_used_id, '.', 3)
+                    ) = %(seller_id)s
+                    OR ei.fk_sku_used_id LIKE %(seller_id_like)s
+              )
             GROUP BY 1, 2, 3
         """,
         "level": "sku",
@@ -194,15 +232,27 @@ QUERY_DEFINITIONS = {
     "sku_traffic": {
         "sql": """
             SELECT
-                __SELLER_EXPR__ AS seller_id,
-                day::date AS day,
-                COALESCE(source, 'NULL_SOURCE') AS source,
+                %(seller_id)s AS seller_id,
+                ei.day::date AS day,
+                COALESCE(ei.source, 'NULL_SOURCE') AS source,
                 NULL::numeric AS quantity,
                 NULL::numeric AS revenue,
-                SUM(page_view) AS page_view
-            FROM ecommerce_export_sku_traffic
-            WHERE day BETWEEN %(start_date)s::date AND %(end_date)s::date
-              AND __SELLER_EXPR__ = %(seller_id)s
+                SUM(ei.page_view) AS page_view
+            FROM ecommerce_export_sku_traffic ei
+            LEFT JOIN ecommerce_sku sku
+                ON ei.fk_sku_used_id = sku.used_id
+            LEFT JOIN ecommerce_seller sel
+                ON sku.fk_seller_id = sel.id
+            WHERE ei.day BETWEEN %(start_date)s::date AND %(end_date)s::date
+              AND (
+                    sel.used_id = %(seller_id)s
+                    OR CONCAT(
+                        split_part(ei.fk_sku_used_id, '.', 1), '.',
+                        split_part(ei.fk_sku_used_id, '.', 2), '.',
+                        split_part(ei.fk_sku_used_id, '.', 3)
+                    ) = %(seller_id)s
+                    OR ei.fk_sku_used_id LIKE %(seller_id_like)s
+              )
             GROUP BY 1, 2, 3
         """,
         "level": "sku",
@@ -220,7 +270,7 @@ def query_seller_sources(
     data_level: str = "both",
     use_item_sales: bool = False,
 ) -> pd.DataFrame:
-    params = {"seller_id": seller_id, "start_date": start_date, "end_date": end_date}
+    params = {"seller_id": seller_id, "seller_id_like": f"{seller_id}.%", "start_date": start_date, "end_date": end_date}
     frames: list[pd.DataFrame] = []
     wanted_level = (data_level or "both").lower()
     with _connect(credentials) as conn:
