@@ -72,6 +72,22 @@ def _json_records(df: pd.DataFrame) -> list[dict[str, Any]]:
     return records
 
 
+def _excel_safe_frame(df: pd.DataFrame) -> pd.DataFrame:
+    clean = df.copy()
+    for col in clean.columns:
+        if pd.api.types.is_datetime64tz_dtype(clean[col]):
+            clean[col] = clean[col].dt.tz_localize(None)
+        elif pd.api.types.is_datetime64_any_dtype(clean[col]):
+            continue
+        elif clean[col].dtype == "object":
+            clean[col] = clean[col].map(
+                lambda value: value.tz_localize(None)
+                if isinstance(value, pd.Timestamp) and value.tzinfo is not None
+                else value
+            )
+    return clean
+
+
 def _to_result_rows(df: pd.DataFrame, metrics: list[str]) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(
@@ -226,9 +242,11 @@ def run_monthly_check(
             if col in frame.columns:
                 frame[col] = pd.to_datetime(frame[col], errors="coerce").dt.strftime("%Y-%m-%d")
 
+    excel_rows = _excel_safe_frame(db_frame)
+    excel_summary = _excel_safe_frame(summary)
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-        summary.to_excel(writer, sheet_name="Summary", index=False)
-        db_frame.to_excel(writer, sheet_name="Monthly_Check", index=False)
+        excel_summary.to_excel(writer, sheet_name="Summary", index=False)
+        excel_rows.to_excel(writer, sheet_name="Monthly_Check", index=False)
         pd.DataFrame(
             {
                 "target_month": [target_month],
