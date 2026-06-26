@@ -266,8 +266,6 @@ QUERY_DEFINITIONS = {
 
 MONTHLY_SOURCE_OPTIONS = [
     "item",
-    "export_seller_sales",
-    "export_seller_traffic",
     "export_sku_sale",
     "export_sku_traffic",
 ]

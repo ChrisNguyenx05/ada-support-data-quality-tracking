@@ -54,10 +54,10 @@ function App() {
   const [queryMetric, setQueryMetric] = useState('all');
   const [queryFlow, setQueryFlow] = useState('all');
   const [queryUseItemSales, setQueryUseItemSales] = useState(false);
-  const [monthlySellerIds, setMonthlySellerIds] = useState('');
-  const [monthlyMonth, setMonthlyMonth] = useState(() => iso(new Date()).slice(0, 7));
-  const [monthlySources, setMonthlySources] = useState(['item', 'export_sku_traffic']);
-  const [monthlyCompany, setMonthlyCompany] = useState('nestle_purina');
+  const [monthlySellerIds, setMonthlySellerIds] = useState('PH.TTK.7494652724024937219');
+  const [monthlyMonth, setMonthlyMonth] = useState('2026-05');
+  const [monthlySources, setMonthlySources] = useState(['item', 'export_sku_sale', 'export_sku_traffic']);
+  const [monthlyCompany, setMonthlyCompany] = useState('loreal_group_ph');
   const [files, setFiles] = useState([]);
   const [mapping, setMapping] = useState([]);
   const [result, setResult] = useState(null);
@@ -344,14 +344,6 @@ function App() {
                 <label className="checkbox-row">
                   <input checked={monthlySources.includes('item')} onChange={(e) => updateMonthlySource('item', e.target.checked)} type="checkbox" />
                   item
-                </label>
-                <label className="checkbox-row">
-                  <input checked={monthlySources.includes('export_seller_sales')} onChange={(e) => updateMonthlySource('export_seller_sales', e.target.checked)} type="checkbox" />
-                  export_seller_sales
-                </label>
-                <label className="checkbox-row">
-                  <input checked={monthlySources.includes('export_seller_traffic')} onChange={(e) => updateMonthlySource('export_seller_traffic', e.target.checked)} type="checkbox" />
-                  export_seller_traffic
                 </label>
                 <label className="checkbox-row">
                   <input checked={monthlySources.includes('export_sku_sale')} onChange={(e) => updateMonthlySource('export_sku_sale', e.target.checked)} type="checkbox" />
