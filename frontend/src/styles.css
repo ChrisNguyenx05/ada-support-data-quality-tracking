@@ -78,6 +78,7 @@ label {
 
 input,
 select,
+textarea,
 button {
   width: 100%;
   border: 1px solid var(--line);
@@ -85,6 +86,11 @@ button {
   padding: 9px 10px;
   font: inherit;
   background: #fff;
+}
+
+textarea {
+  min-height: 92px;
+  resize: vertical;
 }
 
 button {
@@ -121,7 +127,7 @@ button:disabled {
 
 .mode-switch {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
   margin-bottom: 14px;
 }

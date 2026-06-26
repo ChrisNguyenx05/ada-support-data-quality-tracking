@@ -12,7 +12,7 @@ from urllib.parse import unquote, urlparse
 from dq_checker.batch import run_db_batch
 from dq_checker.core import CompareOptions, SellerFileSpec, compare_files, save_upload, temp_upload_dir
 from dq_checker.db import DbCredentials
-from dq_checker.direct_query import run_direct_metric_query
+from dq_checker.direct_query import run_direct_metric_query, run_monthly_check
 
 
 ROOT = Path(__file__).resolve().parent
@@ -276,11 +276,26 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, b"Not found")
 
     def do_POST(self) -> None:
-        if self.path not in ("/api/compare", "/api/batch-db", "/api/query-data"):
+        if self.path not in ("/api/compare", "/api/batch-db", "/api/query-data", "/api/monthly-check"):
             self._send(404, b"Not found")
             return
         try:
             form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={"REQUEST_METHOD": "POST"})
+            if self.path == "/api/monthly-check":
+                result = run_monthly_check(
+                    credentials=DbCredentials(
+                        client=form.getfirst("client") or "darlie",
+                        username=form.getfirst("username") or "",
+                        password=form.getfirst("password") or "",
+                    ),
+                    seller_ids_text=form.getfirst("seller_ids") or "",
+                    target_month=form.getfirst("target_month") or "",
+                    sources_text=form.getfirst("sources") or "all",
+                    company=form.getfirst("company") or "",
+                    output_dir=OUTPUTS,
+                )
+                self._send(200, json.dumps(result, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+                return
             if self.path == "/api/query-data":
                 result = run_direct_metric_query(
                     credentials=DbCredentials(
