@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 CLIENTS_PATH = ROOT / "config" / "clients.json"
+MONTHLY_SQL_PATH = ROOT / "root_docs" / "Monthly Check.sql"
 
 
 @dataclass
@@ -262,7 +264,13 @@ QUERY_DEFINITIONS = {
 }
 
 
-MONTHLY_SOURCE_OPTIONS = ["item", "export_sku_sale", "export_sku_traffic"]
+MONTHLY_SOURCE_OPTIONS = [
+    "item",
+    "export_seller_sales",
+    "export_seller_traffic",
+    "export_sku_sale",
+    "export_sku_traffic",
+]
 
 MONTHLY_CHECK_SQL = """
 WITH params AS (
@@ -422,6 +430,26 @@ FROM sku_traffic_fact;
 """
 
 
+def _monthly_check_sql(path: Path = MONTHLY_SQL_PATH) -> str:
+    sql = path.read_text(encoding="utf-8")
+    params_cte = """
+WITH params AS (
+    SELECT
+        %(target_month)s::date AS target_month,
+        %(seller_ids)s::text[] AS seller_ids,
+        %(sources)s::text[] AS sources,
+        %(company)s::text AS company
+),
+""".lstrip()
+    return re.sub(
+        r"WITH\s+params\s+AS\s*\([\s\S]*?\),\s*\n",
+        params_cte,
+        sql,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+
+
 def query_monthly_check(
     credentials: DbCredentials,
     seller_ids: list[str],
@@ -448,7 +476,7 @@ def query_monthly_check(
         "company": (company or "").strip() or credentials.client,
     }
     with _connect(credentials) as conn:
-        return pd.read_sql_query(MONTHLY_CHECK_SQL, conn, params=params)
+        return pd.read_sql_query(_monthly_check_sql(), conn, params=params)
 
 
 def query_seller_sources(

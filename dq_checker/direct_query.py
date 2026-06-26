@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 import re
 from typing import Any
@@ -53,6 +54,22 @@ def _query_sources(query_flow: str) -> list[str]:
 
 def _split_multi_value(value: str) -> list[str]:
     return [item.strip() for item in re.split(r"[\n,;]+", value or "") if item.strip()]
+
+
+def _json_records(df: pd.DataFrame) -> list[dict[str, Any]]:
+    clean = df.copy()
+    for col in clean.columns:
+        if pd.api.types.is_datetime64_any_dtype(clean[col]):
+            clean[col] = clean[col].dt.strftime("%Y-%m-%d")
+    clean = clean.astype(object).where(pd.notna(clean), None)
+    records = clean.to_dict(orient="records")
+    for row in records:
+        for key, value in row.items():
+            if isinstance(value, Decimal):
+                row[key] = float(value)
+            elif isinstance(value, pd.Timestamp):
+                row[key] = value.strftime("%Y-%m-%d")
+    return records
 
 
 def _to_result_rows(df: pd.DataFrame, metrics: list[str]) -> pd.DataFrame:
@@ -227,7 +244,7 @@ def run_monthly_check(
         "sources": sources,
         "company": company or credentials.client,
         "row_count": int(len(db_frame)),
-        "summary": response_summary.to_dict(orient="records"),
-        "rows": response_rows.head(1000).to_dict(orient="records"),
+        "summary": _json_records(response_summary),
+        "rows": _json_records(response_rows.head(1000)),
         "report_path": str(out_path.resolve()),
     }

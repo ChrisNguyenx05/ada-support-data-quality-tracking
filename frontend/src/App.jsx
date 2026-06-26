@@ -56,7 +56,7 @@ function App() {
   const [queryUseItemSales, setQueryUseItemSales] = useState(false);
   const [monthlySellerIds, setMonthlySellerIds] = useState('');
   const [monthlyMonth, setMonthlyMonth] = useState(() => iso(new Date()).slice(0, 7));
-  const [monthlySources, setMonthlySources] = useState(['export_sku_sale']);
+  const [monthlySources, setMonthlySources] = useState(['item', 'export_sku_traffic']);
   const [monthlyCompany, setMonthlyCompany] = useState('nestle_purina');
   const [files, setFiles] = useState([]);
   const [mapping, setMapping] = useState([]);
@@ -346,6 +346,14 @@ function App() {
                   item
                 </label>
                 <label className="checkbox-row">
+                  <input checked={monthlySources.includes('export_seller_sales')} onChange={(e) => updateMonthlySource('export_seller_sales', e.target.checked)} type="checkbox" />
+                  export_seller_sales
+                </label>
+                <label className="checkbox-row">
+                  <input checked={monthlySources.includes('export_seller_traffic')} onChange={(e) => updateMonthlySource('export_seller_traffic', e.target.checked)} type="checkbox" />
+                  export_seller_traffic
+                </label>
+                <label className="checkbox-row">
                   <input checked={monthlySources.includes('export_sku_sale')} onChange={(e) => updateMonthlySource('export_sku_sale', e.target.checked)} type="checkbox" />
                   export_sku_sale
                 </label>
@@ -427,10 +435,10 @@ function App() {
                           <td><span className="seller-badge">{row.seller_id}</span></td>
                           <td>{row.year_month}</td>
                           <td>{row.source}</td>
-                          <td>{number(row.sum_quantity)}</td>
-                          <td>{number(row.sum_revenue)}</td>
-                          <td>{number(row.page_view)}</td>
-                          <td>{number(row.product_impression)}</td>
+                          <td>{optionalNumber(row.sum_quantity)}</td>
+                          <td>{optionalNumber(row.sum_revenue)}</td>
+                          <td>{optionalNumber(row.page_view)}</td>
+                          <td>{optionalNumber(row.product_impression)}</td>
                         </tr>
                       ))}
                     </tbody>

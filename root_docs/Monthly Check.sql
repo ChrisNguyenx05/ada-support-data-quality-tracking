@@ -1,31 +1,34 @@
--- Monthly by selected month, seller_id, and source
+-- Monthly audit by month, seller_id, and source
 WITH params AS (
     SELECT
         DATE '2026-05-01' AS target_month,
         ARRAY[
-            'ID.TTK.7494745179781958063'
-            --, 'ID.TTK.another_seller_id'
+            'PH.SHP.76176908'
         ]::text[] AS seller_ids,
         ARRAY[
-            -- 'item',
-            'export_sku_sale'
-            --, 'export_sku_traffic'
+            'item',
+            'export_seller_sales',
+            'export_seller_traffic',
+            'export_sku_sale',
+            'export_sku_traffic'
         ]::text[] AS sources,
-        'nestle_purina' as company
+        'nestle_purina'::text AS company
 ),
-item_fact AS (
+
+item_sales AS (
     SELECT
-        p.company  AS company,
+        CONCAT(p.company, ' - ', es.used_id) AS "company - seller",
+        p.company AS company,
         split_part(es.used_id, '.', 1) AS country,
         split_part(es.used_id, '.', 2) AS marketplace,
         es.used_id AS seller_id,
         DATE_TRUNC('month', ei.day)::date AS year_month,
         'item' AS source,
-        NULL AS mapping_check,
-        NULL AS has_finace,
-        NULL AS component_number,
-        NULL AS cancel_not_cancel,
-        SUM(ei.quantity) AS sum_quantity,
+        NULL::text AS mapping_check,
+        NULL::text AS has_finace,
+        NULL::text AS component_number,
+        NULL::text AS cancel_not_cancel,
+        SUM(ei.quantity)::bigint AS sum_quantity,
         SUM(
             CASE
                 WHEN ei.day >= DATE '2026-01-22'
@@ -42,10 +45,10 @@ item_fact AS (
                     THEN ei.s_paid
                 ELSE 0
             END
-        ) AS sum_revenue,
+        )::numeric AS sum_revenue,
         NULL::bigint AS page_view,
         current_timestamp AS query_date,
-        NULL AS product_impression
+        NULL::bigint AS product_impression
     FROM ecommerce_item ei
     JOIN ecommerce_seller es
         ON ei.seller_used_id = es.used_id
@@ -54,10 +57,64 @@ item_fact AS (
       AND ei.day <  p.target_month + INTERVAL '1 month'
       AND es.used_id = ANY(p.seller_ids)
       AND 'item' = ANY(p.sources)
-    GROUP BY
-        1,2,3,4,5,6
+    GROUP BY p.company, es.used_id, DATE_TRUNC('month', ei.day)
 ),
-sku_sale_base AS (
+
+seller_sales AS (
+    SELECT
+        CONCAT(p.company, ' - ', eess.fk_seller_used_id) AS "company - seller",
+        p.company AS company,
+        split_part(eess.fk_seller_used_id, '.', 1) AS country,
+        split_part(eess.fk_seller_used_id, '.', 2) AS marketplace,
+        eess.fk_seller_used_id AS seller_id,
+        DATE_TRUNC('month', eess.day)::date AS year_month,
+        'export_seller_sales' AS source,
+        NULL::text AS mapping_check,
+        NULL::text AS has_finace,
+        NULL::text AS component_number,
+        NULL::text AS cancel_not_cancel,
+        SUM(eess.quantity)::bigint AS sum_quantity,
+        SUM(eess.revenue)::numeric AS sum_revenue,
+        NULL::bigint AS page_view,
+        current_timestamp AS query_date,
+        SUM(eess.product_impression)::bigint AS product_impression
+    FROM ecommerce_export_seller_sales eess
+    CROSS JOIN params p
+    WHERE eess.day >= p.target_month
+      AND eess.day <  p.target_month + INTERVAL '1 month'
+      AND eess.fk_seller_used_id = ANY(p.seller_ids)
+      AND 'export_seller_sales' = ANY(p.sources)
+    GROUP BY p.company, eess.fk_seller_used_id, DATE_TRUNC('month', eess.day)
+),
+
+seller_traffic AS (
+    SELECT
+        CONCAT(p.company, ' - ', eest.fk_seller_used_id) AS "company - seller",
+        p.company AS company,
+        split_part(eest.fk_seller_used_id, '.', 1) AS country,
+        split_part(eest.fk_seller_used_id, '.', 2) AS marketplace,
+        eest.fk_seller_used_id AS seller_id,
+        DATE_TRUNC('month', eest.day)::date AS year_month,
+        'export_seller_traffic' AS source,
+        NULL::text AS mapping_check,
+        NULL::text AS has_finace,
+        NULL::text AS component_number,
+        NULL::text AS cancel_not_cancel,
+        NULL::bigint AS sum_quantity,
+        NULL::numeric AS sum_revenue,
+        SUM(eest.page_view)::bigint AS page_view,
+        current_timestamp AS query_date,
+        SUM(eest.product_impression)::bigint AS product_impression
+    FROM ecommerce_export_seller_traffic eest
+    CROSS JOIN params p
+    WHERE eest.day >= p.target_month
+      AND eest.day <  p.target_month + INTERVAL '1 month'
+      AND eest.fk_seller_used_id = ANY(p.seller_ids)
+      AND 'export_seller_traffic' = ANY(p.sources)
+    GROUP BY p.company, eest.fk_seller_used_id, DATE_TRUNC('month', eest.day)
+),
+
+sku_sales_base AS (
     SELECT
         eess.*,
         COALESCE(
@@ -69,37 +126,39 @@ sku_sale_base AS (
             )
         ) AS resolved_seller_id
     FROM ecommerce_export_sku_sales eess
-    FULL JOIN ecommerce_sku sku
+    LEFT JOIN ecommerce_sku sku
         ON eess.fk_sku_used_id = sku.used_id
-    FULL JOIN ecommerce_seller sel
+    LEFT JOIN ecommerce_seller sel
         ON sku.fk_seller_id = sel.id
 ),
-sku_sale_fact AS (
+
+sku_sales AS (
     SELECT
+        CONCAT(p.company, ' - ', ss.resolved_seller_id) AS "company - seller",
         p.company AS company,
         split_part(ss.resolved_seller_id, '.', 1) AS country,
         split_part(ss.resolved_seller_id, '.', 2) AS marketplace,
         ss.resolved_seller_id AS seller_id,
         DATE_TRUNC('month', ss.day)::date AS year_month,
         'export_sku_sale' AS source,
-        NULL AS mapping_check,
-        NULL AS has_finace,
-        NULL AS component_number,
-        NULL AS cancel_not_cancel,
-        SUM(ss.quantity) AS sum_quantity,
-        SUM(ss.s_onsite_selling) AS sum_revenue,
+        NULL::text AS mapping_check,
+        NULL::text AS has_finace,
+        NULL::text AS component_number,
+        NULL::text AS cancel_not_cancel,
+        SUM(ss.quantity)::bigint AS sum_quantity,
+        SUM(ss.s_onsite_selling)::numeric AS sum_revenue,
         NULL::bigint AS page_view,
         current_timestamp AS query_date,
-        NULL AS product_impression
-    FROM sku_sale_base ss
+        NULL::bigint AS product_impression
+    FROM sku_sales_base ss
     CROSS JOIN params p
     WHERE ss.day >= p.target_month
       AND ss.day <  p.target_month + INTERVAL '1 month'
       AND ss.resolved_seller_id = ANY(p.seller_ids)
       AND 'export_sku_sale' = ANY(p.sources)
-    GROUP BY
-        1,2,3,4,5,6
+    GROUP BY p.company, ss.resolved_seller_id, DATE_TRUNC('month', ss.day)
 ),
+
 sku_traffic_base AS (
     SELECT
         eest.*,
@@ -112,51 +171,49 @@ sku_traffic_base AS (
             )
         ) AS resolved_seller_id
     FROM ecommerce_export_sku_traffic eest
-    FULL JOIN ecommerce_sku sku
+    LEFT JOIN ecommerce_sku sku
         ON eest.fk_sku_used_id = sku.used_id
-    FULL JOIN ecommerce_seller sel
+    LEFT JOIN ecommerce_seller sel
         ON sku.fk_seller_id = sel.id
 ),
-sku_traffic_fact AS (
+
+sku_traffic AS (
     SELECT
+        CONCAT(p.company, ' - ', st.resolved_seller_id) AS "company - seller",
         p.company AS company,
         split_part(st.resolved_seller_id, '.', 1) AS country,
         split_part(st.resolved_seller_id, '.', 2) AS marketplace,
         st.resolved_seller_id AS seller_id,
         DATE_TRUNC('month', st.day)::date AS year_month,
         'export_sku_traffic' AS source,
-        NULL AS mapping_check,
-        NULL AS has_finace,
-        NULL AS component_number,
-        NULL AS cancel_not_cancel,
+        NULL::text AS mapping_check,
+        NULL::text AS has_finace,
+        NULL::text AS component_number,
+        NULL::text AS cancel_not_cancel,
         NULL::bigint AS sum_quantity,
         NULL::numeric AS sum_revenue,
-        SUM(st.page_view) AS page_view,
+        SUM(st.page_view)::bigint AS page_view,
         current_timestamp AS query_date,
-        NULL AS product_impression
+        NULL::bigint AS product_impression
     FROM sku_traffic_base st
     CROSS JOIN params p
     WHERE st.day >= p.target_month
       AND st.day <  p.target_month + INTERVAL '1 month'
       AND st.resolved_seller_id = ANY(p.seller_ids)
       AND 'export_sku_traffic' = ANY(p.sources)
-    GROUP BY
-        1,2,3,4,5,6
+    GROUP BY p.company, st.resolved_seller_id, DATE_TRUNC('month', st.day)
 )
-SELECT *
-FROM item_fact
+
+SELECT * FROM item_sales
 UNION ALL
-SELECT s.*
-FROM sku_sale_fact s
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM item_fact i
-    WHERE i.company     = s.company
-      AND i.country     = s.country
-      AND i.marketplace = s.marketplace
-      AND i.seller_id   = s.seller_id
-      AND i.year_month  = s.year_month
-)
+SELECT * FROM seller_sales
 UNION ALL
-SELECT *
-FROM sku_traffic_fact;
+SELECT * FROM seller_traffic
+UNION ALL
+SELECT * FROM sku_sales
+UNION ALL
+SELECT * FROM sku_traffic
+ORDER BY
+    seller_id,
+    year_month,
+    source;
