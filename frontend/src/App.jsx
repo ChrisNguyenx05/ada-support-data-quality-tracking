@@ -25,11 +25,14 @@ function guessPlatform(sellerId) {
 }
 
 function number(value) {
-  return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (value === null || value === undefined || value === '') return 'NULL';
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return 'NULL';
+  return parsed.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function optionalNumber(value, available = true) {
-  if (!available || value === null || value === undefined || Number.isNaN(Number(value))) return '-';
+  if (!available || value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return 'NULL';
   return number(value);
 }
 
