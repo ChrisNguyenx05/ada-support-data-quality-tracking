@@ -12,7 +12,7 @@ from urllib.parse import unquote, urlparse
 from dq_checker.batch import run_db_batch
 from dq_checker.core import CompareOptions, SellerFileSpec, compare_files, save_upload, temp_upload_dir
 from dq_checker.db import DbCredentials
-from dq_checker.direct_query import run_direct_metric_query, run_monthly_check
+from dq_checker.direct_query import run_direct_metric_query, run_monthly_check, run_single_month_check
 
 
 ROOT = Path(__file__).resolve().parent
@@ -100,6 +100,7 @@ HTML = r"""<!doctype html>
           <option value="darlie">darlie</option>
           <option value="loreal_group_ph">loreal_group_ph</option>
           <option value="nestle_purina">nestle_purina</option>
+          <option value="nestle_aoa">nestle_aoa</option>
         </select>
         <div class="inline">
           <div><label>DB username</label><input name="username" autocomplete="username" required></div>
@@ -276,7 +277,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, b"Not found")
 
     def do_POST(self) -> None:
-        if self.path not in ("/api/compare", "/api/batch-db", "/api/query-data", "/api/monthly-check"):
+        if self.path not in ("/api/compare", "/api/batch-db", "/api/query-data", "/api/monthly-check", "/api/single-month-check"):
             self._send(404, b"Not found")
             return
         try:
@@ -291,6 +292,21 @@ class Handler(BaseHTTPRequestHandler):
                     seller_ids_text=form.getfirst("seller_ids") or "",
                     target_month=form.getfirst("target_month") or "",
                     sources_text=form.getfirst("sources") or "all",
+                    company=form.getfirst("company") or "",
+                    output_dir=OUTPUTS,
+                )
+                self._send(200, json.dumps(result, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+                return
+            if self.path == "/api/single-month-check":
+                result = run_single_month_check(
+                    credentials=DbCredentials(
+                        client=form.getfirst("client") or "darlie",
+                        username=form.getfirst("username") or "",
+                        password=form.getfirst("password") or "",
+                    ),
+                    check_type=form.getfirst("check_type") or "",
+                    seller_id=form.getfirst("seller_id") or "",
+                    target_month=form.getfirst("target_month") or "",
                     company=form.getfirst("company") or "",
                     output_dir=OUTPUTS,
                 )

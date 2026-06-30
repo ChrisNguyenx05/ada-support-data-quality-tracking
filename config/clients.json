@@ -13,5 +13,10 @@
     "host": "data-warehouse-nestle-purina.cbuq4dnkolgc.us-east-1.rds.amazonaws.com",
     "port": 5432,
     "database": "dw-nestle-purina"
+  },
+  "nestle_aoa": {
+    "host": "customore-v2.cbuq4dnkolgc.us-east-1.rds.amazonaws.com",
+    "port": 5432,
+    "database": "dw-nestle-aoa"
   }
 }

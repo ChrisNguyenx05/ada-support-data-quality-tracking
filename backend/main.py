@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from dq_checker.batch import run_db_batch
 from dq_checker.core import SellerFileSpec
 from dq_checker.db import DbCredentials, load_clients
-from dq_checker.direct_query import run_direct_metric_query, run_monthly_check
+from dq_checker.direct_query import run_direct_metric_query, run_monthly_check, run_single_month_check
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -193,6 +193,34 @@ async def monthly_check(
             seller_ids_text=seller_ids,
             target_month=target_month,
             sources_text=sources,
+            company=company,
+            output_dir=OUTPUTS,
+        )
+        report_name = Path(result["report_path"]).name
+        result["report_name"] = report_name
+        result["download_url"] = f"/api/download/{report_name}"
+        result["api_version"] = APP_VERSION
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/single-month-check")
+async def single_month_check(
+    client: str = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
+    check_type: str = Form(...),
+    seller_id: str = Form(...),
+    target_month: str = Form(...),
+    company: str = Form(""),
+) -> dict:
+    try:
+        result = run_single_month_check(
+            credentials=DbCredentials(client=client, username=username, password=password),
+            check_type=check_type,
+            seller_id=seller_id,
+            target_month=target_month,
             company=company,
             output_dir=OUTPUTS,
         )

@@ -7,7 +7,13 @@ from typing import Any
 
 import pandas as pd
 
-from dq_checker.db import DbCredentials, MONTHLY_SOURCE_OPTIONS, query_monthly_check, query_seller_sources_with_debug
+from dq_checker.db import (
+    DbCredentials,
+    MONTHLY_SOURCE_OPTIONS,
+    query_monthly_check,
+    query_single_month_check,
+    query_seller_sources_with_debug,
+)
 
 
 METRIC_OPTIONS = {
@@ -89,19 +95,9 @@ def _excel_safe_frame(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _to_result_rows(df: pd.DataFrame, metrics: list[str]) -> pd.DataFrame:
+    id_cols = ["seller_id", "day", "data_level", "data_type", "query_source_table", "source"]
     if df.empty:
-        return pd.DataFrame(
-            columns=[
-                "seller_id",
-                "day",
-                "data_level",
-                "data_type",
-                "query_source_table",
-                "source",
-                "metric",
-                "value",
-            ]
-        )
+        return pd.DataFrame(columns=[*id_cols, *metrics])
 
     work = df.copy()
     work["day"] = pd.to_datetime(work["day"], errors="coerce").dt.strftime("%Y-%m-%d")
@@ -110,10 +106,11 @@ def _to_result_rows(df: pd.DataFrame, metrics: list[str]) -> pd.DataFrame:
             work[metric] = 0.0
         work[metric] = pd.to_numeric(work[metric], errors="coerce").fillna(0.0)
 
-    id_cols = ["seller_id", "day", "data_level", "data_type", "query_source_table", "source"]
-    long_df = work.melt(id_vars=id_cols, value_vars=metrics, var_name="metric", value_name="value")
-    long_df["value"] = pd.to_numeric(long_df["value"], errors="coerce").fillna(0.0)
-    return long_df.sort_values(["day", "data_level", "data_type", "metric", "source"]).reset_index(drop=True)
+    return (
+        work[id_cols + metrics]
+        .sort_values(["day", "data_level", "data_type", "source"])
+        .reset_index(drop=True)
+    )
 
 
 def run_direct_metric_query(
@@ -145,25 +142,25 @@ def run_direct_metric_query(
     rows = _to_result_rows(db_frame, metrics)
 
     by_day = (
-        rows.groupby(["seller_id", "day", "data_level", "data_type", "metric"], dropna=False)["value"]
+        rows.groupby(["seller_id", "day", "data_level", "data_type"], dropna=False)[metrics]
         .sum()
         .reset_index()
         if not rows.empty
-        else pd.DataFrame(columns=["seller_id", "day", "data_level", "data_type", "metric", "value"])
+        else pd.DataFrame(columns=["seller_id", "day", "data_level", "data_type", *metrics])
     )
     by_source = (
-        rows.groupby(["seller_id", "data_level", "data_type", "query_source_table", "source", "metric"], dropna=False)["value"]
+        rows.groupby(["seller_id", "data_level", "data_type", "query_source_table", "source"], dropna=False)[metrics]
         .sum()
         .reset_index()
         if not rows.empty
-        else pd.DataFrame(columns=["seller_id", "data_level", "data_type", "query_source_table", "source", "metric", "value"])
+        else pd.DataFrame(columns=["seller_id", "data_level", "data_type", "query_source_table", "source", *metrics])
     )
     totals = (
-        rows.groupby(["seller_id", "data_level", "data_type", "metric"], dropna=False)["value"]
+        rows.groupby(["seller_id", "data_level", "data_type"], dropna=False)[metrics]
         .sum()
         .reset_index()
         if not rows.empty
-        else pd.DataFrame(columns=["seller_id", "data_level", "data_type", "metric", "value"])
+        else pd.DataFrame(columns=["seller_id", "data_level", "data_type", *metrics])
     )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -187,11 +184,65 @@ def run_direct_metric_query(
         "query_flow": query_flow,
         "query_sources": query_sources,
         "summary": totals.to_dict(orient="records"),
-        "by_day": by_day.sort_values(["day", "data_level", "data_type", "metric"]).head(1000).to_dict(orient="records") if not by_day.empty else [],
-        "by_source": by_source.sort_values(["data_level", "data_type", "metric", "source"]).head(1000).to_dict(orient="records") if not by_source.empty else [],
+        "by_day": by_day.sort_values(["day", "data_level", "data_type"]).head(1000).to_dict(orient="records") if not by_day.empty else [],
+        "by_source": by_source.sort_values(["data_level", "data_type", "source"]).head(1000).to_dict(orient="records") if not by_source.empty else [],
         "raw_rows": rows.head(1000).to_dict(orient="records") if not rows.empty else [],
         "row_count": int(len(rows)),
         "query_debug": query_debug,
+        "report_path": str(out_path.resolve()),
+    }
+
+
+def run_single_month_check(
+    credentials: DbCredentials,
+    check_type: str,
+    seller_id: str,
+    target_month: str,
+    company: str,
+    output_dir: Path,
+) -> dict[str, Any]:
+    seller_id = seller_id.strip()
+    if not seller_id:
+        raise ValueError("Can nhap seller_id.")
+
+    db_frame = query_single_month_check(
+        credentials=credentials,
+        check_type=check_type,
+        seller_id=seller_id,
+        target_month=target_month,
+        company=company,
+    )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    month_label = pd.to_datetime(target_month, errors="coerce")
+    safe_month = month_label.strftime("%Y%m") if pd.notna(month_label) else re.sub(r"[^A-Za-z0-9_-]+", "_", target_month)
+    safe_seller_id = re.sub(r"[^A-Za-z0-9_-]+", "_", seller_id).strip("_") or "seller"
+    out_path = output_dir / f"{check_type}_check_{safe_seller_id}_{safe_month}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    response_rows = db_frame.copy()
+    for col in ("year_month", "query_at"):
+        if col in response_rows.columns:
+            response_rows[col] = pd.to_datetime(response_rows[col], errors="coerce").dt.strftime("%Y-%m-%d")
+
+    with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+        _excel_safe_frame(db_frame).to_excel(writer, sheet_name=f"Check_{check_type.title()}", index=False)
+        pd.DataFrame(
+            {
+                "check_type": [check_type],
+                "target_month": [target_month],
+                "seller_id": [seller_id],
+                "company": [(company or credentials.client)],
+            }
+        ).to_excel(writer, sheet_name="Params", index=False)
+
+    return {
+        "check_type": check_type,
+        "target_month": target_month,
+        "seller_id": seller_id,
+        "company": company or credentials.client,
+        "row_count": int(len(db_frame)),
+        "rows": _json_records(response_rows.head(1000)),
+        "columns": list(db_frame.columns),
         "report_path": str(out_path.resolve()),
     }
 

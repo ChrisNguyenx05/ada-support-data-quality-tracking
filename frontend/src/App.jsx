@@ -47,7 +47,7 @@ function sellerColor(sellerId) {
 
 function App() {
   const [mode, setMode] = useState('query');
-  const [clients, setClients] = useState(['darlie', 'loreal_group_ph', 'nestle_purina']);
+  const [clients, setClients] = useState(['darlie', 'loreal_group_ph', 'nestle_purina', 'nestle_aoa']);
   const [client, setClient] = useState('darlie');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -61,11 +61,14 @@ function App() {
   const [monthlyMonth, setMonthlyMonth] = useState('2026-05');
   const [monthlySources, setMonthlySources] = useState(['item', 'export_sku_sale', 'export_sku_traffic']);
   const [monthlyCompany, setMonthlyCompany] = useState('loreal_group_ph');
+  const [monthlyCheckType, setMonthlyCheckType] = useState('monthly');
+  const [singleMonthSellerId, setSingleMonthSellerId] = useState('ID.TTK.7494767094873819824');
   const [files, setFiles] = useState([]);
   const [mapping, setMapping] = useState([]);
   const [result, setResult] = useState(null);
   const [queryResult, setQueryResult] = useState(null);
   const [monthlyResult, setMonthlyResult] = useState(null);
+  const [singleMonthResult, setSingleMonthResult] = useState(null);
   const [selectedMetric, setSelectedMetric] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedTable, setSelectedTable] = useState('all');
@@ -85,8 +88,20 @@ function App() {
 
   const queryRows = useMemo(() => queryResult?.by_day || [], [queryResult]);
   const queryTotals = useMemo(() => queryResult?.summary || [], [queryResult]);
+  const queryMetricColumns = useMemo(() => queryResult?.metrics || [], [queryResult]);
+  const queryTotalCards = useMemo(() => {
+    const cards = [];
+    queryTotals.forEach((row) => {
+      queryMetricColumns.forEach((metric) => {
+        cards.push({ ...row, metric, value: row[metric] });
+      });
+    });
+    return cards;
+  }, [queryTotals, queryMetricColumns]);
   const monthlyRows = useMemo(() => monthlyResult?.rows || [], [monthlyResult]);
   const monthlySummary = useMemo(() => monthlyResult?.summary || [], [monthlyResult]);
+  const singleMonthRows = useMemo(() => singleMonthResult?.rows || [], [singleMonthResult]);
+  const singleMonthColumns = useMemo(() => singleMonthResult?.columns || [], [singleMonthResult]);
 
   const metricOptions = useMemo(() => {
     const metrics = new Set((result?.comparison || []).map((row) => row.metric).filter(Boolean));
@@ -145,6 +160,7 @@ function App() {
     setResult(null);
     setQueryResult(null);
     setMonthlyResult(null);
+    setSingleMonthResult(null);
     setSelectedMetric('all');
     setSelectedStatus('all');
     setSelectedTable('all');
@@ -178,6 +194,7 @@ function App() {
     setResult(null);
     setQueryResult(null);
     setMonthlyResult(null);
+    setSingleMonthResult(null);
     setLoading(true);
     try {
       const form = new FormData();
@@ -209,21 +226,30 @@ function App() {
     setResult(null);
     setQueryResult(null);
     setMonthlyResult(null);
+    setSingleMonthResult(null);
     setLoading(true);
     try {
       const form = new FormData();
       form.append('client', client);
       form.append('username', username);
       form.append('password', password);
-      form.append('seller_ids', monthlySellerIds);
       form.append('target_month', `${monthlyMonth}-01`);
-      form.append('sources', monthlySources.join(','));
       form.append('company', monthlyCompany);
 
-      const res = await fetch(`${API_BASE}/api/monthly-check`, { method: 'POST', body: form });
+      if (monthlyCheckType === 'monthly') {
+        form.append('seller_ids', monthlySellerIds);
+        form.append('sources', monthlySources.join(','));
+      } else {
+        form.append('check_type', monthlyCheckType);
+        form.append('seller_id', singleMonthSellerId);
+      }
+
+      const endpoint = monthlyCheckType === 'monthly' ? '/api/monthly-check' : '/api/single-month-check';
+      const res = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', body: form });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || data.error || 'Monthly check failed');
-      setMonthlyResult(data);
+      if (monthlyCheckType === 'monthly') setMonthlyResult(data);
+      else setSingleMonthResult(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -234,6 +260,7 @@ function App() {
   const downloadHref = result?.download_url ? `${API_BASE}${result.download_url}` : '';
   const queryDownloadHref = queryResult?.download_url ? `${API_BASE}${queryResult.download_url}` : '';
   const monthlyDownloadHref = monthlyResult?.download_url ? `${API_BASE}${monthlyResult.download_url}` : '';
+  const singleMonthDownloadHref = singleMonthResult?.download_url ? `${API_BASE}${singleMonthResult.download_url}` : '';
 
   return (
     <div>
@@ -329,6 +356,15 @@ function App() {
 
             {mode === 'monthly' && (
               <>
+                <label>Check type</label>
+                <select value={monthlyCheckType} onChange={(e) => setMonthlyCheckType(e.target.value)}>
+                  <option value="monthly">Monthly data</option>
+                  <option value="content">Check content</option>
+                  <option value="media">Check media</option>
+                </select>
+
+                {monthlyCheckType === 'monthly' ? (
+                  <>
                 <label>Seller IDs</label>
                 <textarea
                   value={monthlySellerIds}
@@ -336,6 +372,13 @@ function App() {
                   placeholder="ID.TTK.7494745179781958063&#10;ID.TTK.another_seller_id"
                   required
                 />
+                  </>
+                ) : (
+                  <>
+                    <label>Seller ID</label>
+                    <input value={singleMonthSellerId} onChange={(e) => setSingleMonthSellerId(e.target.value)} placeholder="ID.TTK.7494767094873819824" required />
+                  </>
+                )}
 
                 <label>Month</label>
                 <input type="month" value={monthlyMonth} onChange={(e) => setMonthlyMonth(e.target.value)} required />
@@ -343,19 +386,23 @@ function App() {
                 <label>Company</label>
                 <input value={monthlyCompany} onChange={(e) => setMonthlyCompany(e.target.value)} placeholder="nestle_purina" />
 
-                <label>Source</label>
-                <label className="checkbox-row">
-                  <input checked={monthlySources.includes('item')} onChange={(e) => updateMonthlySource('item', e.target.checked)} type="checkbox" />
-                  item
-                </label>
-                <label className="checkbox-row">
-                  <input checked={monthlySources.includes('export_sku_sale')} onChange={(e) => updateMonthlySource('export_sku_sale', e.target.checked)} type="checkbox" />
-                  export_sku_sale
-                </label>
-                <label className="checkbox-row">
-                  <input checked={monthlySources.includes('export_sku_traffic')} onChange={(e) => updateMonthlySource('export_sku_traffic', e.target.checked)} type="checkbox" />
-                  export_sku_traffic
-                </label>
+                {monthlyCheckType === 'monthly' && (
+                  <>
+                    <label>Source</label>
+                    <label className="checkbox-row">
+                      <input checked={monthlySources.includes('item')} onChange={(e) => updateMonthlySource('item', e.target.checked)} type="checkbox" />
+                      item
+                    </label>
+                    <label className="checkbox-row">
+                      <input checked={monthlySources.includes('export_sku_sale')} onChange={(e) => updateMonthlySource('export_sku_sale', e.target.checked)} type="checkbox" />
+                      export_sku_sale
+                    </label>
+                    <label className="checkbox-row">
+                      <input checked={monthlySources.includes('export_sku_traffic')} onChange={(e) => updateMonthlySource('export_sku_traffic', e.target.checked)} type="checkbox" />
+                      export_sku_traffic
+                    </label>
+                  </>
+                )}
               </>
             )}
 
@@ -388,7 +435,7 @@ function App() {
               </>
             )}
 
-            <button disabled={loading || (mode === 'batch' && files.length === 0) || (mode === 'monthly' && monthlySources.length === 0)}>
+            <button disabled={loading || (mode === 'batch' && files.length === 0) || (mode === 'monthly' && monthlyCheckType === 'monthly' && monthlySources.length === 0)}>
               {loading ? 'Running...' : (mode === 'query' ? 'Query data' : (mode === 'monthly' ? 'Run Monthly Check' : 'Run batch check'))}
             </button>
           </form>
@@ -400,6 +447,8 @@ function App() {
             <strong>Result</strong>
             {(result?.api_version || queryResult?.api_version) && <span>Backend: {result?.api_version || queryResult?.api_version}</span>}
             {monthlyResult?.api_version && <span>Backend: {monthlyResult.api_version}</span>}
+            {singleMonthResult?.api_version && <span>Backend: {singleMonthResult.api_version}</span>}
+            {singleMonthDownloadHref && <a className="download" href={singleMonthDownloadHref}>Download {singleMonthResult.check_type}</a>}
             {monthlyDownloadHref && <a className="download" href={monthlyDownloadHref}>Download monthly</a>}
             {queryDownloadHref && <a className="download" href={queryDownloadHref}>Download query</a>}
             {downloadHref && <a className="download" href={downloadHref}>Download report</a>}
@@ -445,7 +494,7 @@ function App() {
           {queryResult && (
             <>
               <div className="cards">
-                {queryTotals.slice(0, 4).map((row, i) => (
+                {queryTotalCards.slice(0, 4).map((row, i) => (
                   <div className="metric" key={`${row.data_level}-${row.data_type}-${row.metric}-${i}`}>
                     <b>{number(row.value)}</b>
                     <span>{row.data_level} / {row.data_type} / {row.metric}</span>
@@ -458,16 +507,15 @@ function App() {
                   <summary>By source ({queryResult.by_source?.length || 0})</summary>
                   <div className="table-wrap debug-wrap">
                     <table>
-                      <thead><tr><th>Level</th><th>Type</th><th>Query table</th><th>Source</th><th>Metric</th><th>Value</th></tr></thead>
+                      <thead><tr><th>Level</th><th>Type</th><th>Query table</th><th>Source</th>{queryMetricColumns.map((metric) => <th key={metric}>{metric}</th>)}</tr></thead>
                       <tbody>
                         {(queryResult.by_source || []).map((row, i) => (
-                          <tr key={`${row.data_type}-${row.source}-${row.metric}-${i}`}>
+                          <tr key={`${row.data_type}-${row.source}-${i}`}>
                             <td>{row.data_level}</td>
                             <td>{row.data_type}</td>
                             <td>{row.query_source_table}</td>
                             <td>{row.source}</td>
-                            <td>{row.metric}</td>
-                            <td>{number(row.value)}</td>
+                            {queryMetricColumns.map((metric) => <td key={metric}>{number(row[metric])}</td>)}
                           </tr>
                         ))}
                       </tbody>
@@ -497,17 +545,16 @@ function App() {
                 </details>
                 <div className="table-wrap">
                   <table>
-                    <thead><tr><th>Seller</th><th>Day</th><th>Level</th><th>Type</th><th>Metric</th><th>Value</th></tr></thead>
+                    <thead><tr><th>Seller</th><th>Day</th><th>Level</th><th>Type</th>{queryMetricColumns.map((metric) => <th key={metric}>{metric}</th>)}</tr></thead>
                     <tbody>
-                      {queryRows.length === 0 && <tr><td colSpan="6">No data for selected inputs.</td></tr>}
+                      {queryRows.length === 0 && <tr><td colSpan={4 + queryMetricColumns.length}>No data for selected inputs.</td></tr>}
                       {queryRows.map((row, i) => (
-                        <tr key={`${row.seller_id}-${row.day}-${row.data_type}-${row.metric}-${i}`} style={{ background: sellerColor(row.seller_id) }}>
+                        <tr key={`${row.seller_id}-${row.day}-${row.data_type}-${i}`} style={{ background: sellerColor(row.seller_id) }}>
                           <td><span className="seller-badge">{row.seller_id}</span></td>
                           <td>{row.day}</td>
                           <td>{row.data_level}</td>
                           <td>{row.data_type}</td>
-                          <td>{row.metric}</td>
-                          <td>{number(row.value)}</td>
+                          {queryMetricColumns.map((metric) => <td key={metric}>{number(row[metric])}</td>)}
                         </tr>
                       ))}
                     </tbody>
@@ -516,17 +563,42 @@ function App() {
               </div>
             </>
           )}
+          {singleMonthResult && (
+            <div className="content">
+              <div className="cards">
+                <div className="metric"><b>{number(singleMonthResult.row_count)}</b><span>{singleMonthResult.check_type} rows</span></div>
+                <div className="metric"><b>{singleMonthResult.target_month}</b><span>{singleMonthResult.seller_id}</span></div>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>{singleMonthColumns.map((col) => <th key={col}>{col}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {singleMonthRows.length === 0 && <tr><td colSpan={singleMonthColumns.length || 1}>No data for selected params.</td></tr>}
+                    {singleMonthRows.map((row, i) => (
+                      <tr key={`${row.seller_id || ''}-${row.sub_channel || ''}-${i}`} style={{ background: sellerColor(row.seller_id) }}>
+                        {singleMonthColumns.map((col) => (
+                          <td key={col}>{typeof row[col] === 'number' ? number(row[col]) : row[col]}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {resultErrors.length > 0 && (
             <div className="error">
               <strong>Backend errors:</strong> {resultErrors.join(' | ')}
             </div>
           )}
-          {!queryResult && !monthlyResult && <div className="cards">
+          {!queryResult && !monthlyResult && !singleMonthResult && <div className="cards">
             {['match', 'mismatch', 'missing_in_db', 'suspicious_extra_source'].map((key) => (
               <div className="metric" key={key}><b className={key}>{summary[key] || 0}</b><span>{key}</span></div>
             ))}
           </div>}
-          {!queryResult && !monthlyResult && <div className="content">
+          {!queryResult && !monthlyResult && !singleMonthResult && <div className="content">
             {result && (
               <div className="result-tools">
                 <div className="tool-group">

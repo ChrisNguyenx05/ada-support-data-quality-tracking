@@ -12,6 +12,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 CLIENTS_PATH = ROOT / "config" / "clients.json"
 MONTHLY_SQL_PATH = ROOT / "root_docs" / "Monthly Check.sql"
+CONTENT_SQL_PATH = ROOT / "root_docs" / "Check_content.sql"
+MEDIA_SQL_PATH = ROOT / "root_docs" / "Check_media.sql"
 
 
 @dataclass
@@ -448,6 +450,48 @@ WITH params AS (
     )
 
 
+def _replace_params_cte(sql: str, params_cte: str) -> str:
+    return re.sub(
+        r"WITH\s+params\s+AS\s*\([\s\S]*?\)\s*,?\s*\n",
+        params_cte.lstrip(),
+        sql,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+
+
+def _single_month_check_sql(check_type: str) -> str:
+    key = (check_type or "").strip().lower()
+    if key == "content":
+        sql = CONTENT_SQL_PATH.read_text(encoding="utf-8")
+        params_cte = """
+WITH params AS (
+    SELECT
+        %(target_month)s::date AS start_date,
+        %(target_month)s::date + INTERVAL '1 month' AS end_date,
+        %(seller_id)s::text AS seller_id
+),
+"""
+        sql = _replace_params_cte(sql, params_cte)
+        sql = sql.replace("t.day >= p.start_date\n      AND", "t.day >= p.start_date\n      AND t.day < p.end_date\n      AND")
+        sql = sql.replace("s.day >= p.start_date\n      AND", "s.day >= p.start_date\n      AND s.day < p.end_date\n      AND")
+        sql = sql.replace("e.day >= p.start_date\n    GROUP BY", "e.day >= p.start_date\n      AND e.day < p.end_date\n    GROUP BY")
+        return re.sub(r"'[^']+'\s+AS\s+company", "%(company)s AS company", sql, count=1, flags=re.IGNORECASE)
+    if key == "media":
+        sql = MEDIA_SQL_PATH.read_text(encoding="utf-8")
+        params_cte = """
+WITH params AS (
+    SELECT
+        DATE '2024-01-01' AS start_date,
+        %(target_month)s::date AS tracking_month,
+        %(seller_id)s::text AS seller_id
+)
+"""
+        sql = _replace_params_cte(sql, params_cte)
+        return re.sub(r"'[^']+'\s+AS\s+company", "%(company)s AS company", sql, count=1, flags=re.IGNORECASE)
+    raise ValueError("Check type khong hop le. Hay chon content hoac media.")
+
+
 def query_monthly_check(
     credentials: DbCredentials,
     seller_ids: list[str],
@@ -475,6 +519,26 @@ def query_monthly_check(
     }
     with _connect(credentials) as conn:
         return pd.read_sql_query(_monthly_check_sql(), conn, params=params)
+
+
+def query_single_month_check(
+    credentials: DbCredentials,
+    check_type: str,
+    seller_id: str,
+    target_month: str,
+    company: str,
+) -> pd.DataFrame:
+    clean_seller_id = seller_id.strip()
+    if not clean_seller_id:
+        raise ValueError("Can nhap seller_id.")
+
+    params = {
+        "target_month": target_month,
+        "seller_id": clean_seller_id,
+        "company": (company or "").strip() or credentials.client,
+    }
+    with _connect(credentials) as conn:
+        return pd.read_sql_query(_single_month_check_sql(check_type), conn, params=params)
 
 
 def query_seller_sources(
